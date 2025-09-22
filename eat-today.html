@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今天吃什么？- 美食随机选择器</title>
+    <style>
+        /* --- 基础与布局 --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f7f9fc;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        /* --- 标题 --- */
+        h1.main-title {
+            color: #2c3e50;
+            margin-bottom: 25px;
+            font-size: 2.5em;
+        }
+
+        /* --- 分类选择区域 --- */
+        #category-selection {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .category-item {
+            display: inline-block;
+        }
+
+        .category-item input[type="checkbox"] {
+            display: none; /* 隐藏原始复选框 */
+        }
+
+        .category-item label {
+            padding: 8px 15px;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+            background-color: #f8f8f8;
+            color: #555;
+        }
+
+        /* 选中时的样式 */
+        .category-item input[type="checkbox"]:checked + label {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.3);
+        }
+
+        /* --- 结果显示区域 --- */
+        #result-display {
+            margin: 30px 0;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #f1f3f5;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        #result-display .prompt {
+            font-size: 1.2em;
+            color: #888;
+        }
+
+        #result-display .result-text {
+            font-size: 2.2em;
+            font-weight: bold;
+            color: #e67e22;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* --- 按钮 --- */
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #decide-btn {
+            background-color: #28a745;
+            color: white;
+        }
+
+        #decide-btn:hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
+        }
+
+        #redo-btn {
+            background-color: #ffc107;
+            color: #333;
+        }
+        
+        #redo-btn:hover {
+            background-color: #e0a800;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(255, 193, 7, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 class="main-title">今天吃什么？🤔</h1>
+        
+        <div id="category-selection">
+            </div>
+        
+        <div class="button-group">
+            <button id="decide-btn">开始选择！</button>
+            <button id="redo-btn" style="display: none;">换一个</button>
+        </div>
+
+        <div id="result-display">
+            <p class="prompt">选择你喜欢的分类，然后点击按钮开始！</p>
+        </div>
+    </div>
+
+    <script>
+        const foodData = {
+            "中式盖饭/简餐": [
+                "青椒肉丝盖饭", "红烧排骨饭", "鱼香肉丝盖饭", "宫保鸡丁盖饭", "麻婆豆腐盖饭", "回锅肉盖饭", "酸辣土豆丝盖饭", 
+                "鱼香茄子盖饭", "香菇滑鸡盖饭", "黑椒牛柳盖饭", "土豆牛肉盖饭", "咖喱鸡块盖饭", "西红柿鸡蛋盖饭", "地三鲜盖饭", 
+                "木须肉盖饭", "豉汁排骨盖饭", "京酱肉丝盖饭", "辣子鸡丁盖饭", "照烧鸡腿饭", "卤肉饭", "梅菜扣肉饭", "黄焖鸡米饭", 
+                "台式猪扒饭", "尖椒炒肉盖饭", "孜然羊肉盖饭", "葱爆牛肉盖饭", "肉末茄子盖饭", "肉末豆角盖饭", "糖醋里脊盖饭", 
+                "农家小炒肉盖饭", "小炒黄牛肉盖饭", "鱼香鸡蛋盖饭", "红烧牛腩盖饭", "芹菜炒肉盖饭", "蒜苔炒肉盖饭", 
+                "洋葱炒肉盖饭", "韭黄炒蛋盖饭", "雪菜肉丝盖饭", "榨菜肉丝盖饭", "豆角焖面", "扬州炒饭"
+            ],
+            "面食/粉类": [
+                "兰州牛肉面", "番茄鸡蛋面", "炸酱面", "重庆小面", "武汉热干面", "四川担担面", "北京打卤面", "河南烩面", "刀削面", 
+                "臊子面", "阳春面", "葱油拌面", "鸡汤面", "肥肠面", "排骨面", "鸡丝凉面", "炒面", "桂林米粉", "湖南米粉", 
+                "新疆炒米粉", "螺蛳粉", "过桥米线", "砂锅米线", "酸辣粉", "凉皮", "干炒牛河", "意大利面", "韩国冷面"
+            ],
+            "西式简餐": [
+                "火腿蛋三明治", "金枪鱼三明治", "俱乐部三明治", "牛肉汉堡", "鸡腿堡", "鳕鱼堡", "凯撒沙拉", "鸡肉沙拉", 
+                "牛排套餐", "烤鸡胸肉配杂粮饭", "芝士焗饭", "玛格丽特披萨", "夏威夷披萨", "肉类盛宴披萨", "土豆泥配煎鸡排", 
+                "墨西哥鸡肉卷", "老北京鸡肉卷", "热狗", "南瓜汤配法棍"
+            ],
+            "亚洲风味": [
+                "日式猪排饭", "牛丼", "咖喱猪排饭", "亲子丼", "鳗鱼饭", "日式拉面", "照烧鸡排饭", "石锅拌饭", "泡菜炒饭", 
+                "韩式炸酱面", "大酱汤配饭", "辣炒年糕", "泰式绿咖喱饭", "泰式红咖喱饭", "菠萝炒饭", "Pad Thai", 
+                "海南鸡饭", "喇沙 (Laksa)", "黄油鸡配米饭", "印度香饭 (Biryani)"
+            ],
+            "轻食/健康": [
+                "煎鸡胸肉配糙米饭", "烤三文鱼配藜麦", "豆腐牛油果沙拉", "素食Bowl", "藜麦鸡胸沙拉", "越南春卷", 
+                "希腊酸奶配麦片水果", "蔬菜卷饼", "蘑菇菠菜烘蛋"
+            ],
+            "地方特色/小吃": [
+                "麻辣烫", "麻辣香锅", "沙县小吃", "驴肉火烧", "肉夹馍", "煎饼果子", "凉面", "包子配粥", "酸菜鱼", 
+                "水饺", "锅贴", "馄饨", "羊肉泡馍", "煲仔饭", "生煎包", "竹筒饭", "烧鹅饭", "盐酥鸡饭"
+            ]
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const categoryContainer = document.getElementById('category-selection');
+            const decideBtn = document.getElementById('decide-btn');
+            const redoBtn = document.getElementById('redo-btn');
+            const resultDisplay = document.getElementById('result-display');
+            
+            // 动态生成分类复选框
+            Object.keys(foodData).forEach(category => {
+                const item = document.createElement('div');
+                item.classList.add('category-item');
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = category;
+                checkbox.value = category;
+                
+                const label = document.createElement('label');
+                label.htmlFor = category;
+                label.textContent = category;
+                
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                categoryContainer.appendChild(item);
+            });
+
+            const decideWhatToEat = () => {
+                const selectedCategories = Array.from(document.querySelectorAll('#category-selection input:checked')).map(cb => cb.value);
+                
+                let foodPool = [];
+
+                if (selectedCategories.length === 0) {
+                    // 如果没有选择任何分类，则从所有分类中选择
+                    Object.values(foodData).forEach(list => {
+                        foodPool.push(...list);
+                    });
+                } else {
+                    // 否则，从选定的分类中构建池
+                    selectedCategories.forEach(category => {
+                        foodPool.push(...foodData[category]);
+                    });
+                }
+
+                if (foodPool.length === 0) {
+                    resultDisplay.innerHTML = `<p class="prompt" style="color: #dc3545;">请至少选择一个有效的分类！</p>`;
+                    return;
+                }
+                
+                // 随机选择
+                const randomIndex = Math.floor(Math.random() * foodPool.length);
+                const chosenDish = foodPool[randomIndex];
+                
+                // 显示结果
+                resultDisplay.innerHTML = `<p style="margin:0; color:#555;">今天就吃这个吧！</p><h2 class="result-text">${chosenDish}</h2>`;
+                
+                // 显示“换一个”按钮
+                redoBtn.style.display = 'inline-block';
+            };
+
+            decideBtn.addEventListener('click', decideWhatToEat);
+            redoBtn.addEventListener('click', decideWhatToEat);
+        });
+    </script>
+</body>
+</html>
