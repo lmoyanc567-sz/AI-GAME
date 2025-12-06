@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小鸭子游泳比赛</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <!-- ExcelJS for Excel parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6', // 浅蓝色
+                        secondary: '#FBBF24', // 黄色
+                        success: '#10B981', // 绿色
+                        danger: '#EF4444', // 红色
+                        neutral: '#F3F4F6', // 浅灰色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'swim': 'swim var(--animation-duration) ease-out forwards',
+                    },
+                    keyframes: {
+                        swim: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(var(--target-position))' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .duck-container {
+                position: relative;
+                height: 60px;
+                margin-bottom: 10px;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .duck-lane {
+                position: relative;
+                height: 100%;
+                background: linear-gradient(90deg, #DBEAFE 0%, #BFDBFE 100%);
+                border-radius: 8px;
+            }
+            .duck {
+                position: absolute;
+                top: 50%;
+                left: 0;
+                transform: translateY(-50%);
+                width: 50px;
+                height: 50px;
+                transition: transform 0.3s ease;
+                cursor: pointer;
+                z-index: 10;
+            }
+            .duck:hover {
+                transform: translateY(-50%) scale(1.1);
+            }
+            .duck-name {
+                position: absolute;
+                top: 50%;
+                left: 60px;
+                transform: translateY(-50%);
+                font-weight: 500;
+                z-index: 5;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100px;
+            }
+            .duck-score {
+                position: absolute;
+                top: 50%;
+                right: 10px;
+                transform: translateY(-50%);
+                font-weight: 600;
+                z-index: 5;
+                white-space: nowrap;
+            }
+            .tooltip {
+                position: absolute;
+                background: white;
+                border-radius: 4px;
+                padding: 8px 12px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                z-index: 100;
+                display: none;
+                max-width: 250px;
+                font-size: 14px;
+            }
+            .tooltip::before {
+                content: '';
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                margin-left: -8px;
+                border-width: 8px;
+                border-style: solid;
+                border-color: white transparent transparent transparent;
+            }
+            .duck-shadow {
+                position: absolute;
+                bottom: 5px;
+                width: 30px;
+                height: 5px;
+                background-color: rgba(0, 0, 0, 0.2);
+                border-radius: 50%;
+                left: 10px;
+                transition: width 0.3s ease, left 0.3s ease;
+            }
+            .duck:hover + .duck-shadow {
+                width: 35px;
+                left: 7.5px;
+            }
+            .loading-spinner {
+                border: 4px solid rgba(0, 0, 0, 0.1);
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                border-left-color: #3B82F6;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .wave {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 20px;
+                background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="%233B82F6" fill-opacity="0.2" d="M0,192L48,197.3C96,203,192,213,288,229.3C384,245,480,267,576,250.7C672,235,768,181,864,181.3C960,181,1056,235,1152,234.7C1248,235,1344,181,1392,154.7L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+                background-size: 1440px 20px;
+                animation: wave 10s linear infinite;
+            }
+            @keyframes wave {
+                0% { background-position-x: 0; }
+                100% { background-position-x: 1440px; }
+            }
+            .progress-bar {
+                height: 8px;
+                background-color: #E5E7EB;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            .progress-fill {
+                height: 100%;
+                border-radius: 4px;
+                background-color: #3B82F6;
+                transition: width 0.3s ease;
+            }
+            .file-drop-area {
+                border: 2px dashed #CBD5E1;
+                border-radius: 8px;
+                padding: 30px;
+                text-align: center;
+                transition: all 0.3s ease;
+            }
+            .file-drop-area:hover, .file-drop-area.dragover {
+                border-color: #3B82F6;
+                background-color: #EFF6FF;
+            }
+            .podium {
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                margin: 20px 0;
+                height: 100px;
+            }
+            .podium-step {
+                width: 80px;
+                background-color: #FBBF24;
+                border-radius: 4px 4px 0 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-end;
+                padding-bottom: 10px;
+                position: relative;
+            }
+            .podium-step.first {
+                height: 100px;
+                background-color: #FFD700;
+            }
+            .podium-step.second {
+                height: 80px;
+                background-color: #C0C0C0;
+                margin: 0 10px;
+            }
+            .podium-step.third {
+                height: 60px;
+                background-color: #CD7F32;
+            }
+            .podium-number {
+                position: absolute;
+                top: 5px;
+                font-size: 24px;
+                font-weight: bold;
+                color: white;
+            }
+            .podium-name {
+                font-size: 12px;
+                font-weight: bold;
+                color: white;
+                text-align: center;
+            }
+            .podium-score {
+                font-size: 10px;
+                color: white;
+            }
+            .confetti {
+                position: absolute;
+                width: 10px;
+                height: 10px;
+                background-color: #f00;
+                border-radius: 50%;
+                animation: confetti-fall 3s ease-in-out forwards;
+            }
+            @keyframes confetti-fall {
+                0% {
+                    transform: translateY(-100vh) rotate(0deg);
+                    opacity: 1;
+                }
+                100% {
+                    transform: translateY(100vh) rotate(360deg);
+                    opacity: 0;
+                }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center mb-4 md:mb-0">
+                <img src="https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D" alt="小鸭子图标" class="w-10 h-10 mr-3">
+                <h1 class="text-2xl font-bold text-gray-800">小鸭子游泳比赛</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="index.html" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 flex items-center transition-colors">
+                    <i class="fa fa-arrow-left mr-2"></i>
+                    <span>返回主系统</span>
+                </a>
+                <button id="helpBtn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 flex items-center transition-colors">
+                    <i class="fa fa-question-circle mr-2"></i>
+                    <span>使用帮助</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区域 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 文件上传区域 -->
+        <section id="uploadSection" class="mb-8">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">数据导入</h2>
+                <div class="flex flex-col md:flex-row md:items-center md:space-x-4">
+                    <div id="fileDropArea" class="file-drop-area flex-1 mb-4 md:mb-0">
+                        <i class="fa fa-cloud-upload text-4xl text-gray-400 mb-4"></i>
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">拖放文件到此处或点击上传</h3>
+                        <p class="text-sm text-gray-500 mb-4">支持 CSV、Excel 格式的成绩数据文件</p>
+                        <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls">
+                        <button id="browseFiles" class="px-6 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors">
+                            浏览文件
+                        </button>
+                    </div>
+                    <div class="flex flex-col space-y-2">
+                        <button id="useDemoData" class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-yellow-600 transition-colors">
+                            <i class="fa fa-play-circle mr-2"></i>
+                            使用演示数据
+                        </button>
+                        <a href="成绩数据模板.csv" download class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-center">
+                            <i class="fa fa-download mr-2"></i>
+                            下载数据模板
+                        </a>
+                    </div>
+                </div>
+                <div id="fileProcessing" class="hidden mt-4">
+                    <div class="flex items-center justify-center">
+                        <div class="loading-spinner mr-3"></div>
+                        <p class="text-gray-700">正在处理文件，请稍候...</p>
+                    </div>
+                </div>
+                <div id="fileError" class="hidden mt-4 p-3 bg-red-50 text-red-600 rounded-md">
+                    <i class="fa fa-exclamation-circle mr-2"></i>
+                    <span>文件格式不正确，请上传有效的CSV或Excel文件。</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 比赛控制区域 -->
+        <section id="raceControlSection" class="hidden mb-8">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">比赛控制</h2>
+                <div class="flex flex-col md:flex-row md:items-center md:space-x-6">
+                    <div class="mb-4 md:mb-0">
+                        <label for="animationSpeed" class="block text-sm font-medium text-gray-700 mb-2">
+                            动画速度：<span id="speedValue">3秒</span>
+                        </label>
+                        <input type="range" id="animationSpeed" min="1" max="5" value="3" class="w-64 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    <div class="flex space-x-4">
+                        <button id="startAnimation" class="px-6 py-3 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors flex items-center">
+                            <i class="fa fa-play mr-2"></i>
+                            开始比赛
+                        </button>
+                        <button id="resetAnimation" class="px-6 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors flex items-center">
+                            <i class="fa fa-refresh mr-2"></i>
+                            重置
+                        </button>
+                        <button id="exportResults" class="px-6 py-3 bg-success text-white rounded-md hover:bg-green-600 transition-colors flex items-center">
+                            <i class="fa fa-download mr-2"></i>
+                            导出结果
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 比赛结果区域 -->
+        <section id="raceResultsSection" class="hidden mb-8">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">比赛结果</h2>
+                <div id="podiumContainer" class="hidden">
+                    <h3 class="text-lg font-medium text-gray-700 mb-3">领奖台</h3>
+                    <div class="podium">
+                        <div class="podium-step third">
+                            <div class="podium-number">3</div>
+                            <div class="podium-name" id="thirdPlaceName">--</div>
+                            <div class="podium-score" id="thirdPlaceScore">--</div>
+                        </div>
+                        <div class="podium-step first">
+                            <div class="podium-number">1</div>
+                            <div class="podium-name" id="firstPlaceName">--</div>
+                            <div class="podium-score" id="firstPlaceScore">--</div>
+                        </div>
+                        <div class="podium-step second">
+                            <div class="podium-number">2</div>
+                            <div class="podium-name" id="secondPlaceName">--</div>
+                            <div class="podium-score" id="secondPlaceScore">--</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <h3 class="text-lg font-medium text-gray-700 mb-3">详细排名</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">排名</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生姓名</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总成绩</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody" class="bg-white divide-y divide-gray-200">
+                                <!-- 将在这里动态生成表格内容 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 小鸭子游泳比赛区域 -->
+        <section id="raceSection" class="hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="relative overflow-hidden rounded-lg bg-gradient-to-b from-blue-300 to-blue-200 p-4">
+                    <div id="duckRaceContainer" class="mb-4">
+                        <!-- 小鸭子泳道将在这里动态生成 -->
+                    </div>
+                    <div class="wave"></div>
+                </div>
+                <div class="mt-4 text-sm text-gray-600">
+                    <p><i class="fa fa-info-circle mr-1 text-primary"></i> 每只小鸭子代表一名学生，游动距离对应其总成绩。</p>
+                    <p class="mt-1"><i class="fa fa-hand-pointer-o mr-1 text-primary"></i> 点击小鸭子查看详细信息。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 学生详情模态框 -->
+        <div id="studentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg max-w-md w-full">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800" id="modalStudentName">--</h2>
+                        <button id="closeStudentModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">总成绩</h3>
+                            <p class="text-lg font-semibold text-gray-800" id="modalStudentScore">--</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">班级排名</h3>
+                            <p class="text-lg font-semibold text-gray-800" id="modalStudentRank">--</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500">学科成绩</h3>
+                            <div id="modalStudentSubjects" class="mt-2 space-y-2">
+                                <!-- 将在这里动态生成学科成绩 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 帮助模态框 -->
+        <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">使用帮助</h2>
+                        <button id="closeHelpModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">数据导入</h3>
+                            <p class="text-gray-600">系统支持CSV和Excel格式的成绩数据文件。您可以点击"浏览文件"按钮选择文件，或直接拖放文件到上传区域。</p>
+                            <p class="text-gray-600 mt-2">如果没有数据文件，可以点击"使用演示数据"按钮加载示例数据。</p>
+                            <p class="text-gray-600 mt-2">您也可以下载数据模板，按照模板格式填写自己的数据。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">比赛控制</h3>
+                            <p class="text-gray-600">使用滑块调整动画速度，从极慢（5秒）到极速（1秒）。</p>
+                            <p class="text-gray-600 mt-2">点击"开始比赛"按钮启动动画，所有小鸭子将从同一起跑线出发，根据总成绩向右移动。</p>
+                            <p class="text-gray-600 mt-2">点击"重置"按钮可以重新开始比赛。</p>
+                            <p class="text-gray-600 mt-2">点击"导出结果"按钮可以将比赛结果导出为CSV文件。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">查看结果</h3>
+                            <p class="text-gray-600">比赛结束后，系统会显示领奖台和详细排名。</p>
+                            <p class="text-gray-600 mt-2">点击任意小鸭子可以查看该学生的详细信息。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">数据格式要求</h3>
+                            <p class="text-gray-600">数据文件必须包含以下字段：</p>
+                            <ul class="list-disc pl-5 mt-2 text-gray-600">
+                                <li>姓名：学生姓名</li>
+                                <li>总分：学生所有科目的总分</li>
+                                <li>排名：学生在班级中的排名</li>
+                            </ul>
+                            <p class="text-gray-600 mt-2">可选字段：</p>
+                            <ul class="list-disc pl-5 mt-2 text-gray-600">
+                                <li>语文、数学、英语等各学科成绩</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-white border-t mt-12">
+        <div class="container mx-auto px-4 py-6">
+            <div class="text-center text-gray-500 text-sm">
+                <p>© 2025 小鸭子游泳比赛 | 学生成绩可视化系统</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // 全局变量
+        let studentData = [];
+        let processedData = [];
+        let animationRunning = false;
+        let animationDuration = 3; // 默认3秒
+        let raceResults = [];
+        let raceStartTime = 0;
+
+        // DOM 元素
+        const fileInput = document.getElementById('fileInput');
+        const fileDropArea = document.getElementById('fileDropArea');
+        const fileProcessing = document.getElementById('fileProcessing');
+        const fileError = document.getElementById('fileError');
+        const uploadSection = document.getElementById('uploadSection');
+        const raceControlSection = document.getElementById('raceControlSection');
+        const raceSection = document.getElementById('raceSection');
+        const raceResultsSection = document.getElementById('raceResultsSection');
+        const podiumContainer = document.getElementById('podiumContainer');
+        const useDemoDataBtn = document.getElementById('useDemoData');
+        const browseFilesBtn = document.getElementById('browseFiles');
+        const startAnimationBtn = document.getElementById('startAnimation');
+        const resetAnimationBtn = document.getElementById('resetAnimation');
+        const exportResultsBtn = document.getElementById('exportResults');
+        const animationSpeedSlider = document.getElementById('animationSpeed');
+        const speedValueDisplay = document.getElementById('speedValue');
+        const helpBtn = document.getElementById('helpBtn');
+        const closeHelpModalBtn = document.getElementById('closeHelpModal');
+        const helpModal = document.getElementById('helpModal');
+        const studentModal = document.getElementById('studentModal');
+        const closeStudentModalBtn = document.getElementById('closeStudentModal');
+        const modalStudentName = document.getElementById('modalStudentName');
+        const modalStudentScore = document.getElementById('modalStudentScore');
+        const modalStudentRank = document.getElementById('modalStudentRank');
+        const modalStudentSubjects = document.getElementById('modalStudentSubjects');
+        const resultsTableBody = document.getElementById('resultsTableBody');
+
+        // 初始化事件监听
+        function initEventListeners() {
+            // 文件上传相关
+            browseFilesBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            fileDropArea.addEventListener('dragover', handleDragOver);
+            fileDropArea.addEventListener('dragleave', handleDragLeave);
+            fileDropArea.addEventListener('drop', handleDrop);
+            useDemoDataBtn.addEventListener('click', loadDemoData);
+
+            // 动画控制
+            startAnimationBtn.addEventListener('click', startAnimation);
+            resetAnimationBtn.addEventListener('click', resetAnimation);
+            exportResultsBtn.addEventListener('click', exportResults);
+
+            // 动画速度滑块
+            animationSpeedSlider.addEventListener('input', updateAnimationSpeed);
+
+            // 模态框
+            helpBtn.addEventListener('click', () => helpModal.classList.remove('hidden'));
+            closeHelpModalBtn.addEventListener('click', () => helpModal.classList.add('hidden'));
+            closeStudentModalBtn.addEventListener('click', () => studentModal.classList.add('hidden'));
+        }
+
+        // 文件上传处理
+        function handleDragOver(e) {
+            e.preventDefault();
+            fileDropArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            fileDropArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            fileDropArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function processFile(file) {
+            fileError.classList.add('hidden');
+            fileProcessing.classList.remove('hidden');
+            
+            const fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.csv')) {
+                parseCSV(file);
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                parseExcel(file);
+            } else {
+                fileProcessing.classList.add('hidden');
+                fileError.classList.remove('hidden');
+            }
+        }
+
+        function parseCSV(file) {
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: results => {
+                    fileProcessing.classList.add('hidden');
+                    
+                    if (results.errors.length > 0) {
+                        fileError.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    studentData = results.data;
+                    processData();
+                },
+                error: () => {
+                    fileProcessing.classList.add('hidden');
+                    fileError.classList.remove('hidden');
+                }
+            });
+        }
+
+        function parseExcel(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = new ExcelJS.Workbook();
+                
+                workbook.xlsx.load(data).then(workbook => {
+                    const worksheet = workbook.getWorksheet(1);
+                    const jsonData = [];
+                    
+                    // 获取表头
+                    const headers = [];
+                    worksheet.getRow(1).eachCell((cell, colNumber) => {
+                        headers.push(cell.value);
+                    });
+                    
+                    // 获取数据行
+                    for (let i = 2; i <= worksheet.rowCount; i++) {
+                        const row = {};
+                        let hasData = false;
+                        
+                        worksheet.getRow(i).eachCell((cell, colNumber) => {
+                            if (cell.value !== undefined && cell.value !== null) {
+                                row[headers[colNumber - 1]] = cell.value;
+                                hasData = true;
+                            }
+                        });
+                        
+                        if (hasData) {
+                            jsonData.push(row);
+                        }
+                    }
+                    
+                    fileProcessing.classList.add('hidden');
+                    studentData = jsonData;
+                    processData();
+                }).catch(() => {
+                    fileProcessing.classList.add('hidden');
+                    fileError.classList.remove('hidden');
+                });
+            };
+            
+            reader.onerror = () => {
+                fileProcessing.classList.add('hidden');
+                fileError.classList.remove('hidden');
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 加载演示数据
+        function loadDemoData() {
+            fileProcessing.classList.remove('hidden');
+            
+            // 模拟异步加载
+            setTimeout(() => {
+                studentData = [
+                    { 姓名: '张三', 语文: 85, 数学: 92, 英语: 78, 物理: 88, 化学: 90, 生物: 82, 总分: 515, 排名: 3 },
+                    { 姓名: '李四', 语文: 90, 数学: 85, 英语: 88, 物理: 92, 化学: 86, 生物: 89, 总分: 530, 排名: 1 },
+                    { 姓名: '王五', 语文: 78, 数学: 82, 英语: 85, 物理: 76, 化学: 80, 生物: 88, 总分: 489, 排名: 8 },
+                    { 姓名: '赵六', 语文: 88, 数学: 90, 英语: 92, 物理: 85, 化学: 88, 生物: 90, 总分: 533, 排名: 1 },
+                    { 姓名: '钱七', 语文: 82, 数学: 78, 英语: 80, 物理: 88, 化学: 92, 生物: 85, 总分: 505, 排名: 5 },
+                    { 姓名: '孙八', 语文: 95, 数学: 88, 英语: 90, 物理: 92, 化学: 85, 生物: 88, 总分: 538, 排名: 1 },
+                    { 姓名: '周九', 语文: 76, 数学: 80, 英语: 78, 物理: 82, 化学: 85, 生物: 88, 总分: 489, 排名: 8 },
+                    { 姓名: '吴十', 语文: 89, 数学: 92, 英语: 85, 物理: 88, 化学: 90, 生物: 82, 总分: 526, 排名: 2 },
+                    { 姓名: '郑十一', 语文: 84, 数学: 86, 英语: 88, 物理: 90, 化学: 82, 生物: 85, 总分: 515, 排名: 3 },
+                    { 姓名: '王十二', 语文: 80, 数学: 82, 英语: 85, 物理: 90, 化学: 92, 生物: 88, 总分: 517, 排名: 3 },
+                    { 姓名: '李十三', 语文: 86, 数学: 88, 英语: 90, 物理: 82, 化学: 85, 生物: 88, 总分: 519, 排名: 3 },
+                    { 姓名: '张十四', 语文: 90, 数学: 92, 英语: 88, 物理: 85, 化学: 80, 生物: 82, 总分: 517, 排名: 3 },
+                    { 姓名: '刘十五', 语文: 82, 数学: 85, 英语: 88, 物理: 90, 化学: 92, 生物: 88, 总分: 525, 排名: 2 },
+                    { 姓名: '陈十六', 语文: 88, 数学: 85, 英语: 82, 物理: 80, 化学: 88, 生物: 90, 总分: 513, 排名: 6 },
+                    { 姓名: '杨十七', 语文: 92, 数学: 90, 英语: 88, 物理: 85, 化学: 82, 生物: 80, 总分: 517, 排名: 3 }
+                ];
+                
+                fileProcessing.classList.add('hidden');
+                processData();
+            }, 1500);
+        }
+
+        // 数据处理
+        function processData() {
+            // 检查数据格式
+            if (!validateData()) {
+                fileError.classList.remove('hidden');
+                return;
+            }
+            
+            // 处理每个学生的数据
+            processedData = studentData.map(student => {
+                return {
+                    ...student,
+                    // 计算目标位置（基于总分）
+                    targetPosition: 0
+                };
+            });
+            
+            // 找出总分的最大值和最小值，用于归一化
+            const scores = processedData.map(s => s.总分);
+            const maxScore = Math.max(...scores);
+            const minScore = Math.min(...scores);
+            const scoreRange = maxScore - minScore;
+            
+            // 计算每个学生的目标位置（归一化到0-90%）
+            processedData.forEach(student => {
+                student.targetPosition = ((student.总分 - minScore) / scoreRange) * 90;
+            });
+            
+            // 按总分排序
+            processedData.sort((a, b) => b.总分 - a.总分);
+            
+            // 更新UI
+            updateUI();
+        }
+
+        // 验证数据格式
+        function validateData() {
+            if (!studentData || studentData.length === 0) {
+                return false;
+            }
+            
+            // 检查是否包含必要字段
+            const firstStudent = studentData[0];
+            if (!firstStudent.姓名 || !firstStudent.总分) {
+                return false;
+            }
+            
+            return true;
+        }
+
+        // 更新UI
+        function updateUI() {
+            // 显示比赛控制区域和比赛区域，隐藏上传区域
+            uploadSection.classList.add('hidden');
+            raceControlSection.classList.remove('hidden');
+            raceSection.classList.remove('hidden');
+            raceResultsSection.classList.remove('hidden');
+            
+            // 创建小鸭子游泳比赛
+            createDuckRace();
+            
+            // 重置结果
+            resetResults();
+        }
+
+        // 创建小鸭子游泳比赛
+        function createDuckRace() {
+            const container = document.getElementById('duckRaceContainer');
+            container.innerHTML = '';
+            
+            // 为每个学生创建泳道
+            processedData.forEach((student, index) => {
+                const duckContainer = document.createElement('div');
+                duckContainer.className = 'duck-container';
+                
+                const lane = document.createElement('div');
+                lane.className = 'duck-lane';
+                
+                const duck = document.createElement('img');
+                duck.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D';
+                duck.className = 'duck';
+                duck.alt = student.姓名;
+                duck.dataset.index = index;
+                
+                // 设置小鸭子的目标位置
+                duck.style.setProperty('--target-position', `${student.targetPosition}%`);
+                duck.style.setProperty('--animation-duration', `${animationDuration}s`);
+                
+                // 添加点击事件
+                duck.addEventListener('click', () => showStudentDetails(index));
+                
+                // 添加悬停提示
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                tooltip.innerHTML = `
+                    <div class="font-medium">${student.姓名}</div>
+                    <div class="mt-1">总分: ${student.总分}</div>
+                    <div>排名: ${student.排名}</div>
+                `;
+                
+                duck.addEventListener('mouseenter', (e) => {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${e.pageX}px`;
+                    tooltip.style.top = `${e.pageY + 20}px`;
+                    document.body.appendChild(tooltip);
+                });
+                
+                duck.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = `${e.pageX}px`;
+                    tooltip.style.top = `${e.pageY + 20}px`;
+                });
+                
+                duck.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                    document.body.removeChild(tooltip);
+                });
+                
+                const duckName = document.createElement('div');
+                duckName.className = 'duck-name';
+                duckName.textContent = student.姓名;
+                
+                const duckScore = document.createElement('div');
+                duckScore.className = 'duck-score';
+                duckScore.textContent = student.总分;
+                
+                const duckShadow = document.createElement('div');
+                duckShadow.className = 'duck-shadow';
+                
+                lane.appendChild(duck);
+                lane.appendChild(duckShadow);
+                lane.appendChild(duckName);
+                lane.appendChild(duckScore);
+                duckContainer.appendChild(lane);
+                container.appendChild(duckContainer);
+            });
+        }
+
+        // 更新动画速度
+        function updateAnimationSpeed() {
+            const speed = animationSpeedSlider.value;
+            animationDuration = 6 - speed; // 转换为1-5秒
+            
+            // 更新显示
+            speedValueDisplay.textContent = `${animationDuration}秒`;
+            
+            // 更新所有小鸭子的动画持续时间
+            const ducks = document.querySelectorAll('.duck');
+            ducks.forEach(duck => {
+                duck.style.setProperty('--animation-duration', `${animationDuration}s`);
+            });
+        }
+
+        // 开始动画
+        function startAnimation() {
+            if (animationRunning) return;
+            
+            animationRunning = true;
+            startAnimationBtn.disabled = true;
+            startAnimationBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // 重置结果
+            resetResults();
+            
+            // 记录开始时间
+            raceStartTime = Date.now();
+            
+            const ducks = document.querySelectorAll('.duck');
+            
+            ducks.forEach((duck, index) => {
+                // 重置位置
+                duck.style.transform = 'translateY(-50%) translateX(0)';
+                
+                // 启动动画
+                setTimeout(() => {
+                    duck.style.animation = 'none';
+                    duck.offsetHeight; // 触发重排
+                    duck.style.animation = 'swim var(--animation-duration) ease-out forwards';
+                    
+                    // 记录完成时间
+                    setTimeout(() => {
+                        const finishTime = Date.now();
+                        const duration = (finishTime - raceStartTime) / 1000;
+                        
+                        // 添加到结果中
+                        raceResults.push({
+                            student: processedData[index],
+                            finishTime: duration.toFixed(2)
+                        });
+                        
+                        // 检查是否所有小鸭子都完成了
+                        if (raceResults.length === processedData.length) {
+                            showResults();
+                        }
+                    }, animationDuration * 1000);
+                }, 0);
+            });
+            
+            // 动画结束后重新启用按钮
+            setTimeout(() => {
+                animationRunning = false;
+                startAnimationBtn.disabled = false;
+                startAnimationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }, animationDuration * 1000);
+        }
+
+        // 重置动画
+        function resetAnimation() {
+            const ducks = document.querySelectorAll('.duck');
+            ducks.forEach(duck => {
+                duck.style.animation = 'none';
+                duck.style.transform = 'translateY(-50%) translateX(0)';
+            });
+            
+            animationRunning = false;
+            startAnimationBtn.disabled = false;
+            startAnimationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            // 重置结果
+            resetResults();
+        }
+
+        // 重置结果
+        function resetResults() {
+            raceResults = [];
+            podiumContainer.classList.add('hidden');
+            resultsTableBody.innerHTML = '';
+        }
+
+        // 显示结果
+        function showResults() {
+            // 按完成时间排序
+            raceResults.sort((a, b) => parseFloat(a.finishTime) - parseFloat(b.finishTime));
+            
+            // 显示领奖台
+            showPodium();
+            
+            // 更新结果表格
+            updateResultsTable();
+            
+            // 显示庆祝动画
+            showCelebration();
+        }
+
+        // 显示领奖台
+        function showPodium() {
+            podiumContainer.classList.remove('hidden');
+            
+            if (raceResults.length >= 1) {
+                document.getElementById('firstPlaceName').textContent = raceResults[0].student.姓名;
+                document.getElementById('firstPlaceScore').textContent = raceResults[0].student.总分;
+            }
+            
+            if (raceResults.length >= 2) {
+                document.getElementById('secondPlaceName').textContent = raceResults[1].student.姓名;
+                document.getElementById('secondPlaceScore').textContent = raceResults[1].student.总分;
+            }
+            
+            if (raceResults.length >= 3) {
+                document.getElementById('thirdPlaceName').textContent = raceResults[2].student.姓名;
+                document.getElementById('thirdPlaceScore').textContent = raceResults[2].student.总分;
+            }
+        }
+
+        // 更新结果表格
+        function updateResultsTable() {
+            resultsTableBody.innerHTML = '';
+            
+            raceResults.forEach((result, index) => {
+                const row = document.createElement('tr');
+                
+                // 排名
+                const rankCell = document.createElement('td');
+                rankCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const rankSpan = document.createElement('span');
+                rankSpan.className = 'px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full';
+                
+                if (index === 0) {
+                    rankSpan.className += ' bg-yellow-100 text-yellow-800';
+                    rankSpan.textContent = '🥇 1';
+                } else if (index === 1) {
+                    rankSpan.className += ' bg-gray-100 text-gray-800';
+                    rankSpan.textContent = '🥈 2';
+                } else if (index === 2) {
+                    rankSpan.className += ' bg-orange-100 text-orange-800';
+                    rankSpan.textContent = '🥉 3';
+                } else {
+                    rankSpan.className += ' bg-blue-100 text-blue-800';
+                    rankSpan.textContent = index + 1;
+                }
+                
+                rankCell.appendChild(rankSpan);
+                row.appendChild(rankCell);
+                
+                // 学生姓名
+                const nameCell = document.createElement('td');
+                nameCell.className = 'px-6 py-4 whitespace-nowrap';
+                nameCell.textContent = result.student.姓名;
+                row.appendChild(nameCell);
+                
+                // 总成绩
+                const scoreCell = document.createElement('td');
+                scoreCell.className = 'px-6 py-4 whitespace-nowrap';
+                scoreCell.textContent = result.student.总分;
+                row.appendChild(scoreCell);
+                
+                // 完成时间
+                const timeCell = document.createElement('td');
+                timeCell.className = 'px-6 py-4 whitespace-nowrap';
+                timeCell.textContent = `${result.finishTime}秒`;
+                row.appendChild(timeCell);
+                
+                resultsTableBody.appendChild(row);
+            });
+        }
+
+        // 显示庆祝动画
+        function showCelebration() {
+            const container = document.querySelector('.wave').parentElement;
+            
+            // 创建50个五彩纸屑
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                
+                // 随机颜色
+                const colors = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff'];
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                // 随机位置
+                confetti.style.left = `${Math.random() * 100}%`;
+                confetti.style.animationDelay = `${Math.random() * 2}s`;
+                
+                container.appendChild(confetti);
+            }
+            
+            // 3秒后清除五彩纸屑
+            setTimeout(() => {
+                const confettiElements = document.querySelectorAll('.confetti');
+                confettiElements.forEach(confetti => {
+                    confetti.remove();
+                });
+            }, 5000);
+        }
+
+        // 显示学生详情
+        function showStudentDetails(index) {
+            const student = processedData[index];
+            
+            modalStudentName.textContent = student.姓名;
+            modalStudentScore.textContent = student.总分;
+            modalStudentRank.textContent = student.排名;
+            
+            // 清空学科成绩
+            modalStudentSubjects.innerHTML = '';
+            
+            // 获取所有学科
+            const subjects = Object.keys(student).filter(key => 
+                !['姓名', '总分', '排名', 'targetPosition'].includes(key)
+            );
+            
+            // 添加学科成绩
+            subjects.forEach(subject => {
+                const subjectDiv = document.createElement('div');
+                subjectDiv.className = 'flex justify-between items-center';
+                
+                const subjectName = document.createElement('span');
+                subjectName.className = 'text-sm text-gray-600';
+                subjectName.textContent = subject;
+                
+                const subjectScore = document.createElement('span');
+                subjectScore.className = 'text-sm font-medium text-gray-800';
+                subjectScore.textContent = student[subject];
+                
+                subjectDiv.appendChild(subjectName);
+                subjectDiv.appendChild(subjectScore);
+                modalStudentSubjects.appendChild(subjectDiv);
+            });
+            
+            // 显示模态框
+            studentModal.classList.remove('hidden');
+        }
+
+        // 导出结果
+        function exportResults() {
+            if (raceResults.length === 0) {
+                alert('请先进行比赛，然后再导出结果！');
+                return;
+            }
+            
+            // 创建CSV内容
+            let csvContent = '排名,学生姓名,总成绩,完成时间\n';
+            
+            raceResults.forEach((result, index) => {
+                csvContent += `${index + 1},${result.student.姓名},${result.student.总分},${result.finishTime}秒\n`;
+            });
+            
+            // 创建Blob对象
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `小鸭子游泳比赛结果_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            
+            // 触发下载
+            link.click();
+            
+            // 清理
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // 初始化
+        function init() {
+            initEventListeners();
+            updateAnimationSpeed();
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

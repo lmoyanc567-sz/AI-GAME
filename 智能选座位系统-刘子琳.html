@@ -1,0 +1,2225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能排座位系统 - 教师教学工具</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        accent: '#2563eb',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        light: '#f3f4f6',
+                        dark: '#1f2937'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
+                        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .glass-effect {
+                background: rgba(255, 255, 255, 0.25);
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+            
+            .seat-hover {
+                transition: all 0.3s ease;
+            }
+            
+            .seat-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+            
+            .desk {
+                background-color: #d1d5db;
+                border: 1px solid #9ca3af;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            
+            .chair {
+                background-color: #f3f4f6;
+                border: 1px solid #d1d5db;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            }
+            
+            .drag-over {
+                border: 2px dashed #3b82f6;
+                background-color: rgba(59, 130, 246, 0.1);
+            }
+            
+            .tab-active {
+                color: #3b82f6;
+                border-bottom: 2px solid #3b82f6;
+            }
+            
+            .btn-primary {
+                @apply bg-primary text-white px-4 py-2 rounded-md hover:bg-accent transition-colors duration-300 flex items-center justify-center;
+            }
+            
+            .btn-secondary {
+                @apply bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors duration-300 flex items-center justify-center;
+            }
+            
+            .btn-success {
+                @apply bg-success text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors duration-300 flex items-center justify-center;
+            }
+            
+            .btn-danger {
+                @apply bg-danger text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors duration-300 flex items-center justify-center;
+            }
+            
+            .form-input {
+                @apply w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary;
+            }
+            
+            .form-label {
+                @apply block text-sm font-medium text-gray-700 mb-1;
+            }
+            
+            .form-group {
+                @apply mb-4;
+            }
+            
+            .student-card {
+                @apply relative bg-white rounded-lg shadow-sm p-2 cursor-pointer transition-all duration-300 border-2 border-transparent;
+            }
+            
+            .student-card:hover {
+                @apply shadow-md border-primary;
+            }
+            
+            .student-card.dragging {
+                @apply opacity-50 border-primary;
+            }
+            
+            .student-card.drag-over {
+                @apply border-2 border-dashed border-primary bg-blue-50;
+            }
+            
+            .male {
+                @apply bg-blue-100;
+            }
+            
+            .female {
+                @apply bg-pink-100;
+            }
+            
+            .special-needs {
+                @apply border-2 border-yellow-400;
+            }
+            
+            .notification {
+                @apply fixed top-4 right-4 z-50 max-w-sm rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 p-4 flex items-start transform transition-all duration-300 ease-in-out;
+            }
+            
+            .notification-success {
+                @apply border-l-4 border-green-500;
+            }
+            
+            .notification-error {
+                @apply border-l-4 border-red-500;
+            }
+            
+            .notification-warning {
+                @apply border-l-4 border-yellow-500;
+            }
+            
+            .notification-info {
+                @apply border-l-4 border-blue-500;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center">
+                <i class="fa fa-th-large text-primary text-2xl mr-3"></i>
+                <h1 class="text-xl font-bold text-primary">智能排座位系统</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="help-btn" class="text-gray-600 hover:text-primary transition-colors">
+                    <i class="fa fa-question-circle text-lg"></i>
+                </button>
+                <button id="settings-btn" class="text-gray-600 hover:text-primary transition-colors">
+                    <i class="fa fa-cog text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- 功能选项卡 -->
+        <div class="bg-white rounded-lg shadow-sm mb-6">
+            <div class="flex border-b">
+                <button class="tab-btn tab-active flex-1 py-3 px-4 font-medium text-center" data-tab="arrangement">
+                    <i class="fa fa-th-large mr-2"></i>座位排列
+                </button>
+                <button class="tab-btn flex-1 py-3 px-4 font-medium text-center text-gray-600" data-tab="students">
+                    <i class="fa fa-users mr-2"></i>学生管理
+                </button>
+                <button class="tab-btn flex-1 py-3 px-4 font-medium text-center text-gray-600" data-tab="plans">
+                    <i class="fa fa-folder-open mr-2"></i>方案管理
+                </button>
+            </div>
+        </div>
+
+        <!-- 座位排列选项卡内容 -->
+        <div id="arrangement-tab" class="tab-content">
+            <!-- 控制面板 -->
+            <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+                <div class="flex flex-wrap gap-4">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">排座维度选择</label>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="rule-btn bg-primary text-white px-3 py-1 rounded-full text-sm flex items-center" data-dimension="specialNeeds">
+                                <i class="fa fa-check-circle mr-1"></i>特殊需求
+                            </button>
+                            <button class="rule-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm flex items-center" data-dimension="gender">
+                                <i class="fa fa-circle-o mr-1"></i>性别
+                            </button>
+                            <button class="rule-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm flex items-center" data-dimension="height">
+                                <i class="fa fa-circle-o mr-1"></i>身高
+                            </button>
+                            <button class="rule-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm flex items-center" data-dimension="score">
+                                <i class="fa fa-circle-o mr-1"></i>成绩
+                            </button>
+                            <button class="rule-btn bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm flex items-center" data-dimension="personality">
+                                <i class="fa fa-circle-o mr-1"></i>性格
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">提示：可多选，系统将根据选择的维度智能排座</p>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">班级信息</label>
+                        <div class="flex gap-2">
+                            <select id="class-select" class="flex-1 border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="class1">三年级二班</option>
+                                <option value="class2">四年级一班</option>
+                                <option value="class3">五年级三班</option>
+                            </select>
+                            <button id="edit-class-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md transition-colors">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="auto-arrange-btn" class="btn-primary">
+                            <i class="fa fa-magic mr-2"></i>智能排座
+                        </button>
+                        <button id="save-plan-btn" class="btn-success">
+                            <i class="fa fa-save mr-2"></i>保存方案
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 教室座位视图 -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-medium text-gray-800">教室座位</h2>
+                </div>
+                
+                <!-- 简化的教室布局 -->
+                <div class="bg-white rounded-lg p-6">
+                    <!-- 简化的讲台 -->
+                    <div class="w-full h-12 bg-gray-200 rounded-md mb-8 flex items-center justify-center">
+                        <span class="text-gray-700 font-medium">讲台</span>
+                    </div>
+                    
+                    <!-- 座位网格 -->
+                    <div id="classroom-grid" class="grid grid-cols-5 gap-4">
+                        <!-- 座位将通过JS动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- 学生管理选项卡内容 -->
+        <div id="students-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-medium text-gray-800">学生管理</h2>
+                    <button id="add-student-btn" class="btn-primary">
+                        <i class="fa fa-plus mr-2"></i>添加学生
+                    </button>
+                </div>
+                
+                <!-- 学生筛选 -->
+                <div class="flex flex-wrap gap-4 mb-4">
+                    <div class="flex-1 min-w-[200px]">
+                        <input type="text" id="student-search" placeholder="搜索学生姓名..." class="form-input">
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="gender-filter" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                            <option value="all">所有性别</option>
+                            <option value="male">男生</option>
+                            <option value="female">女生</option>
+                        </select>
+                        <select id="score-filter" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                            <option value="all">所有成绩</option>
+                            <option value="high">优秀</option>
+                            <option value="medium">良好</option>
+                            <option value="low">待提高</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- 学生列表 -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">姓名</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">性别</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">身高 (cm)</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成绩</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">性格</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">特殊需求</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="students-list" class="bg-white divide-y divide-gray-200">
+                            <!-- 学生列表将通过JS动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 方案管理选项卡内容 -->
+        <div id="plans-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-medium text-gray-800">座位方案</h2>
+                    <div class="flex gap-2">
+                        <button id="compare-plans-btn" class="btn-secondary">
+                            <i class="fa fa-columns mr-2"></i>对比方案
+                        </button>
+                        <button id="import-export-btn" class="btn-secondary">
+                            <i class="fa fa-download mr-2"></i>导入/导出
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 方案列表 -->
+                <div id="plans-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- 方案卡片将通过JS动态生成 -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 添加/编辑学生模态框 -->
+    <div id="student-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="border-b px-6 py-4">
+                <h3 id="modal-title" class="text-lg font-medium text-gray-900">添加学生</h3>
+            </div>
+            <div class="px-6 py-4">
+                <form id="student-form">
+                    <input type="hidden" id="student-id">
+                    <div class="grid grid-cols-1 gap-y-4 gap-x-2 sm:grid-cols-2">
+                        <div class="sm:col-span-2">
+                            <label for="student-name" class="form-label">姓名</label>
+                            <input type="text" id="student-name" class="form-input" placeholder="请输入学生姓名" required>
+                        </div>
+                        
+                        <div>
+                            <label for="student-gender" class="form-label">性别</label>
+                            <select id="student-gender" class="form-input" required>
+                                <option value="male">男</option>
+                                <option value="female">女</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="student-height" class="form-label">身高 (cm)</label>
+                            <input type="number" id="student-height" class="form-input" placeholder="请输入身高" min="100" max="220" required>
+                        </div>
+                        
+                        <div>
+                            <label for="student-score" class="form-label">成绩</label>
+                            <select id="student-score" class="form-input" required>
+                                <option value="high">优秀</option>
+                                <option value="medium">良好</option>
+                                <option value="low">待提高</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="student-personality" class="form-label">性格</label>
+                            <select id="student-personality" class="form-input" required>
+                                <option value="active">活泼</option>
+                                <option value="quiet">安静</option>
+                                <option value="neutral">中性</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="student-special-needs" class="form-label">特殊需求</label>
+                            <select id="student-special-needs" class="form-input" required>
+                                <option value="0">无</option>
+                                <option value="1">视力问题</option>
+                                <option value="2">听力问题</option>
+                                <option value="3">行动不便</option>
+                                <option value="4">其他</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+                <button id="cancel-btn" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    取消
+                </button>
+                <button id="save-btn" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保存方案模态框 -->
+    <div id="save-plan-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="border-b px-6 py-4">
+                <h3 class="text-lg font-medium text-gray-900">保存座位方案</h3>
+            </div>
+            <div class="px-6 py-4">
+                <form id="plan-form">
+                    <div class="mb-4">
+                        <label for="plan-name" class="form-label">方案名称</label>
+                        <input type="text" id="plan-name" class="form-input" placeholder="请输入方案名称" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="plan-description" class="form-label">方案描述</label>
+                        <textarea id="plan-description" class="form-input" rows="3" placeholder="请输入方案描述"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end gap-3">
+                <button id="cancel-plan-btn" class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    取消
+                </button>
+                <button id="confirm-save-btn" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帮助模态框 -->
+    <div id="help-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+            <div class="border-b px-6 py-4 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">使用帮助</h3>
+                <button id="close-help-btn" class="text-gray-400 hover:text-gray-500">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="px-6 py-4 max-h-[70vh] overflow-y-auto">
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="text-md font-medium text-gray-800 mb-2">基本操作</h4>
+                        <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                            <li>在<strong>学生管理</strong>选项卡中添加或编辑学生信息</li>
+                            <li>在<strong>座位排列</strong>选项卡中选择排座维度，点击<strong>自动排座</strong>生成座位方案</li>
+                            <li>可以通过<strong>拖拽</strong>方式手动调整学生位置</li>
+                            <li>点击<strong>保存方案</strong>可以保存当前座位安排</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-md font-medium text-gray-800 mb-2">排座维度说明</h4>
+                        <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                            <li><strong>特殊需求</strong>：自动为视力、听力或行动不便的学生分配合适座位</li>
+                            <li><strong>性别</strong>：尽量保持男女比例均衡，避免单性别集中</li>
+                            <li><strong>身高</strong>：按照身高分组，矮个子坐前排，高个子坐后排</li>
+                            <li><strong>成绩</strong>：实现优弱互补，高分学生与低分学生搭配</li>
+                            <li><strong>性格</strong>：活泼与安静学生搭配，提高课堂互动效果</li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-md font-medium text-gray-800 mb-2">方案管理</h4>
+                        <ul class="list-disc pl-5 space-y-1 text-gray-600">
+                            <li>在<strong>方案管理</strong>选项卡中，可以查看和管理已保存的座位方案</li>
+                            <li>点击方案卡片可以加载对应方案</li>
+                            <li>使用<strong>对比方案</strong>功能可以比较不同方案的差异</li>
+                            <li>通过<strong>导入/导出</strong>功能可以备份或迁移数据</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="close-help" class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    我知道了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 学生数据
+        let students = [
+            { id: 1, name: '张三', gender: 'male', height: 165, score: 'high', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 2, name: '李四', gender: 'male', height: 170, score: 'medium', personality: 'quiet', specialNeeds: 0, specialNeedsType: null },
+            { id: 3, name: '王五', gender: 'male', height: 168, score: 'low', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 4, name: '赵六', gender: 'male', height: 172, score: 'high', personality: 'neutral', specialNeeds: 0, specialNeedsType: null },
+            { id: 5, name: '钱七', gender: 'male', height: 167, score: 'medium', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 6, name: '孙八', gender: 'male', height: 169, score: 'low', personality: 'quiet', specialNeeds: 0, specialNeedsType: null },
+            { id: 7, name: '周九', gender: 'male', height: 171, score: 'medium', personality: 'neutral', specialNeeds: 0, specialNeedsType: null },
+            { id: 8, name: '吴十', gender: 'male', height: 166, score: 'high', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 9, name: '郑十一', gender: 'female', height: 160, score: 'high', personality: 'quiet', specialNeeds: 1, specialNeedsType: 'vision' }, // 视力问题
+            { id: 10, name: '王十二', gender: 'female', height: 158, score: 'medium', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 11, name: '赵十三', gender: 'female', height: 162, score: 'high', personality: 'neutral', specialNeeds: 0, specialNeedsType: null },
+            { id: 12, name: '钱十四', gender: 'female', height: 159, score: 'medium', personality: 'quiet', specialNeeds: 0, specialNeedsType: null },
+            { id: 13, name: '孙十五', gender: 'female', height: 161, score: 'low', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 14, name: '周十六', gender: 'female', height: 163, score: 'high', personality: 'neutral', specialNeeds: 0, specialNeedsType: null },
+            { id: 15, name: '吴十七', gender: 'female', height: 157, score: 'medium', personality: 'quiet', specialNeeds: 0, specialNeedsType: null },
+            { id: 16, name: '郑十八', gender: 'female', height: 164, score: 'low', personality: 'active', specialNeeds: 1, specialNeedsType: 'hearing' }, // 听力问题
+            { id: 17, name: '王十九', gender: 'male', height: 173, score: 'medium', personality: 'quiet', specialNeeds: 0, specialNeedsType: null },
+            { id: 18, name: '赵二十', gender: 'male', height: 164, score: 'low', personality: 'neutral', specialNeeds: 0, specialNeedsType: null },
+            { id: 19, name: '钱二十一', gender: 'female', height: 156, score: 'high', personality: 'active', specialNeeds: 0, specialNeedsType: null },
+            { id: 20, name: '孙二十二', gender: 'female', height: 165, score: 'medium', personality: 'quiet', specialNeeds: 1, specialNeedsType: 'mobility' } // 行动不便
+        ];
+
+        // 当前座位安排
+        let currentArrangement = Array(5).fill().map(() => Array(5).fill(null));
+        let currentPlanId = null;
+        
+        // 选中的排座维度
+        let selectedDimensions = new Set(['specialNeeds']); // 默认选中特殊需求
+        
+        // 座位方案数据
+        let seatingPlans = [
+            {
+                id: 1,
+                name: '期中考试座位',
+                description: '按照成绩高低交叉排列',
+                date: '2023-11-01',
+                arrangement: [
+                    [{ row: 0, col: 0, studentId: 9 }, { row: 0, col: 1, studentId: 19 }, { row: 0, col: 2, studentId: 4 }, { row: 0, col: 3, studentId: 14 }, { row: 0, col: 4, studentId: 1 }],
+                    [{ row: 1, col: 0, studentId: 16 }, { row: 1, col: 1, studentId: 10 }, { row: 1, col: 2, studentId: 18 }, { row: 1, col: 3, studentId: 12 }, { row: 1, col: 4, studentId: 7 }],
+                    [{ row: 2, col: 0, studentId: 15 }, { row: 2, col: 1, studentId: 3 }, { row: 2, col: 2, studentId: 20 }, { row: 2, col: 3, studentId: 8 }, { row: 2, col: 4, studentId: 11 }],
+                    [{ row: 3, col: 0, studentId: 6 }, { row: 3, col: 1, studentId: 13 }, { row: 3, col: 2, studentId: 5 }, { row: 3, col: 3, studentId: 2 }, { row: 3, col: 4, studentId: 17 }],
+                    [{ row: 4, col: 0, studentId: null }, { row: 4, col: 1, studentId: null }, { row: 4, col: 2, studentId: null }, { row: 4, col: 3, studentId: null }, { row: 4, col: 4, studentId: null }]
+                ]
+            }
+        ];
+
+        // DOM元素
+        const studentModal = document.getElementById('student-modal');
+        const studentForm = document.getElementById('student-form');
+        const modalTitle = document.getElementById('modal-title');
+        const studentId = document.getElementById('student-id');
+        const studentName = document.getElementById('student-name');
+        const studentGender = document.getElementById('student-gender');
+        const studentHeight = document.getElementById('student-height');
+        const studentScore = document.getElementById('student-score');
+        const studentPersonality = document.getElementById('student-personality');
+        const addStudentBtn = document.getElementById('add-student-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const studentsList = document.getElementById('students-list');
+        const classroomGrid = document.getElementById('classroom-grid');
+        const autoArrangeBtn = document.getElementById('auto-arrange-btn');
+        const randomArrangeBtn = document.getElementById('random-arrange-btn');
+        const savePlanModal = document.getElementById('save-plan-modal');
+        const planForm = document.getElementById('plan-form');
+        const planName = document.getElementById('plan-name');
+        const planDescription = document.getElementById('plan-description');
+        const savePlanBtn = document.getElementById('save-plan-btn');
+        const confirmSaveBtn = document.getElementById('confirm-save-btn');
+        const cancelPlanBtn = document.getElementById('cancel-plan-btn');
+        const plansList = document.getElementById('plans-list');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const helpModal = document.getElementById('help-modal');
+        const helpBtn = document.getElementById('help-btn');
+        const closeHelpBtn = document.getElementById('close-help-btn');
+        const closeHelp = document.getElementById('close-help');
+        const studentSearch = document.getElementById('student-search');
+        const genderFilter = document.getElementById('gender-filter');
+        const scoreFilter = document.getElementById('score-filter');
+        const ruleBtns = document.querySelectorAll('.rule-btn');
+// 全局变量，用于存储当前编辑的学生ID
+let currentStudentId = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化座位视图
+            renderClassroom();
+            
+            // 初始化学生列表
+            renderStudentsList();
+            
+            // 初始化方案列表
+            renderPlansList();
+            
+            // 初始化维度按钮状态
+            ruleBtns.forEach(btn => {
+                const dimension = btn.dataset.dimension;
+                if (selectedDimensions.has(dimension)) {
+                    btn.classList.add('bg-primary', 'text-white');
+                    btn.classList.remove('bg-gray-200', 'text-gray-700');
+                    btn.querySelector('i').classList.remove('fa-circle-o');
+                    btn.querySelector('i').classList.add('fa-check-circle');
+                } else {
+                    btn.classList.remove('bg-primary', 'text-white');
+                    btn.classList.add('bg-gray-200', 'text-gray-700');
+                    btn.querySelector('i').classList.add('fa-circle-o');
+                    btn.querySelector('i').classList.remove('fa-check-circle');
+                }
+            });
+            
+            // 绑定事件
+            bindEvents();
+        });
+
+        // 绑定事件
+        function bindEvents() {
+            // 选项卡切换
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tabId = btn.dataset.tab;
+                    
+                    // 更新选项卡按钮样式
+                    tabBtns.forEach(b => {
+                        b.classList.remove('tab-active');
+                        b.classList.add('text-gray-600');
+                    });
+                    btn.classList.add('tab-active');
+                    btn.classList.remove('text-gray-600');
+                    
+                    // 显示对应选项卡内容
+                    tabContents.forEach(tab => {
+                        tab.classList.add('hidden');
+                    });
+                    document.getElementById(`${tabId}-tab`).classList.remove('hidden');
+                });
+            });
+            
+            // 排座维度选择切换
+            ruleBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const dimension = btn.dataset.dimension;
+                    
+                    // 特殊需求维度不能取消选择
+                    if (dimension === 'specialNeeds') {
+                        return;
+                    }
+                    
+                    if (btn.classList.contains('bg-primary')) {
+                        // 取消选中
+                        btn.classList.remove('bg-primary', 'text-white');
+                        btn.classList.add('bg-gray-200', 'text-gray-700');
+                        btn.querySelector('i').classList.remove('fa-check-circle');
+                        btn.querySelector('i').classList.add('fa-circle-o');
+                        selectedDimensions.delete(dimension);
+                    } else {
+                        // 选中
+                        btn.classList.remove('bg-gray-200', 'text-gray-700');
+                        btn.classList.add('bg-primary', 'text-white');
+                        btn.querySelector('i').classList.remove('fa-circle-o');
+                        btn.querySelector('i').classList.add('fa-check-circle');
+                        selectedDimensions.add(dimension);
+                    }
+                    
+                    console.log('已选择的排座维度:', Array.from(selectedDimensions));
+                });
+            });
+            
+            // 添加学生按钮
+            addStudentBtn.addEventListener('click', () => {
+                modalTitle.textContent = '添加学生';
+                studentForm.reset();
+                studentId.value = '';
+                document.getElementById('student-special-needs').value = '0';
+                currentStudentId = null;
+                studentModal.classList.remove('hidden');
+            });
+            
+            // 保存学生按钮
+            saveBtn.addEventListener('click', () => {
+                studentForm.dispatchEvent(new Event('submit'));
+            });
+            
+            // 取消按钮
+            cancelBtn.addEventListener('click', () => {
+                studentModal.classList.add('hidden');
+            });
+            
+            // 学生表单提交
+            studentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const id = studentId.value ? parseInt(studentId.value) : Date.now();
+                const name = studentName.value.trim();
+                const gender = studentGender.value;
+                const height = parseInt(studentHeight.value);
+                const score = studentScore.value;
+                const personality = studentPersonality.value;
+                const specialNeedsSelect = document.getElementById('student-special-needs');
+                const specialNeedsValue = parseInt(specialNeedsSelect.value);
+                
+                // 转换特殊需求值
+                const specialNeeds = specialNeedsValue > 0 ? 1 : 0;
+                let specialNeedsType = null;
+                if (specialNeedsValue === 1) specialNeedsType = 'vision';
+                else if (specialNeedsValue === 2) specialNeedsType = 'hearing';
+                else if (specialNeedsValue === 3) specialNeedsType = 'mobility';
+                else if (specialNeedsValue === 4) specialNeedsType = 'other';
+                
+                if (name && height) {
+                    if (currentStudentId) {
+                        // 编辑学生
+                        updateStudent(id, name, gender, height, score, personality, specialNeeds, specialNeedsType);
+                    } else {
+                        // 添加学生
+                        addStudent(id, name, gender, height, score, personality, specialNeeds, specialNeedsType);
+                    }
+                    
+                    studentModal.classList.add('hidden');
+                }
+            });
+            
+            // 自动排座按钮
+            autoArrangeBtn.addEventListener('click', autoArrange);
+            
+            // 随机排座按钮
+            randomArrangeBtn.addEventListener('click', randomArrange);
+            
+            // 保存方案按钮
+            savePlanBtn.addEventListener('click', () => {
+                savePlanModal.classList.remove('hidden');
+            });
+            
+            // 确认保存方案按钮
+            confirmSaveBtn.addEventListener('click', () => {
+                const name = planName.value.trim();
+                const description = planDescription.value.trim();
+                
+                if (name) {
+                    savePlan(name, description);
+                    savePlanModal.classList.add('hidden');
+                    planForm.reset();
+                }
+            });
+            
+            // 取消保存方案按钮
+            cancelPlanBtn.addEventListener('click', () => {
+                savePlanModal.classList.add('hidden');
+                planForm.reset();
+            });
+            
+            // 帮助按钮
+            helpBtn.addEventListener('click', () => {
+                helpModal.classList.remove('hidden');
+            });
+            
+            // 关闭帮助按钮
+            closeHelpBtn.addEventListener('click', () => {
+                helpModal.classList.add('hidden');
+            });
+            
+            closeHelp.addEventListener('click', () => {
+                helpModal.classList.add('hidden');
+            });
+            
+            // 学生搜索
+            studentSearch.addEventListener('input', () => {
+                renderStudentsList();
+            });
+            
+            // 性别筛选
+            genderFilter.addEventListener('change', () => {
+                renderStudentsList();
+            });
+            
+            // 成绩筛选
+            scoreFilter.addEventListener('change', () => {
+                renderStudentsList();
+            });
+        }
+
+        // 渲染教室座位
+        function renderClassroom() {
+            classroomGrid.innerHTML = '';
+            
+            // 创建座位网格
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    const seatId = `seat-${row}-${col}`;
+                    
+                    // 创建座位容器
+                    const seatContainer = document.createElement('div');
+                    seatContainer.id = seatId;
+                    seatContainer.className = 'bg-gray-100 rounded-lg p-3 min-h-[80px] flex items-center justify-center transition-all duration-300 cursor-pointer hover:bg-gray-200';
+                    
+                    // 添加拖拽事件
+                    seatContainer.setAttribute('draggable', 'true');
+                    seatContainer.setAttribute('data-row', row);
+                    seatContainer.setAttribute('data-col', col);
+                    
+                    seatContainer.addEventListener('dragstart', handleDragStart);
+                    seatContainer.addEventListener('dragover', handleDragOver);
+                    seatContainer.addEventListener('drop', handleDrop);
+                    seatContainer.addEventListener('dragenter', handleDragEnter);
+                    seatContainer.addEventListener('dragleave', handleDragLeave);
+                    
+                    // 如果有学生坐在这个座位上
+                    const studentId = currentArrangement[row][col];
+                    if (studentId) {
+                        const student = students.find(s => s.id === studentId);
+                        if (student) {
+                            const studentCard = createStudentCard(student);
+                            seatContainer.appendChild(studentCard);
+                            
+                            // 添加点击事件显示学生信息
+                            seatContainer.addEventListener('click', (e) => {
+                                if (!e.defaultPrevented) {
+                                    showStudentInfo(student);
+                                }
+                            });
+                            
+                            // 为学生卡片也添加点击事件，确保点击卡片也能编辑
+                            studentCard.addEventListener('click', (e) => {
+                                e.stopPropagation(); // 阻止事件冒泡
+                                showStudentInfo(student);
+                            });
+                        }
+                    }
+                    
+                    classroomGrid.appendChild(seatContainer);
+                }
+            }
+        }
+
+        // 创建学生卡片
+        function createStudentCard(student) {
+            const card = document.createElement('div');
+            card.className = `student-card ${student.gender} ${student.specialNeeds ? 'special-needs' : ''} w-full h-full flex flex-col items-center justify-center`;
+            card.setAttribute('data-student-id', student.id);
+            
+            // 添加拖拽事件
+            card.setAttribute('draggable', 'true');
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragover', handleDragOver);
+            card.addEventListener('drop', handleDrop);
+            card.addEventListener('dragenter', handleDragEnter);
+            card.addEventListener('dragleave', handleDragLeave);
+            
+            // 学生信息
+            const name = document.createElement('div');
+            name.className = 'font-medium text-center text-sm';
+            name.textContent = student.name;
+            
+            // 特殊需求图标
+            let specialNeedsIcon = '';
+            if (student.specialNeeds) {
+                if (student.specialNeedsType === 'vision') {
+                    specialNeedsIcon = '<i class="fa fa-eye text-yellow-500 mr-1"></i>';
+                } else if (student.specialNeedsType === 'hearing') {
+                    specialNeedsIcon = '<i class="fa fa-deaf text-yellow-500 mr-1"></i>';
+                } else if (student.specialNeedsType === 'mobility') {
+                    specialNeedsIcon = '<i class="fa fa-wheelchair text-yellow-500 mr-1"></i>';
+                } else {
+                    specialNeedsIcon = '<i class="fa fa-exclamation-circle text-yellow-500 mr-1"></i>';
+                }
+            }
+            
+            card.appendChild(name);
+            if (specialNeedsIcon) {
+                const icon = document.createElement('div');
+                icon.className = 'text-xs text-center mt-1';
+                icon.innerHTML = specialNeedsIcon;
+                card.appendChild(icon);
+            }
+            
+            return card;
+        }
+
+        // 拖拽开始
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+                studentId: e.target.getAttribute('data-student-id'),
+                row: e.target.closest('.seat')?.getAttribute('data-row'),
+                col: e.target.closest('.seat')?.getAttribute('data-col')
+            }));
+            
+            e.target.classList.add('dragging');
+        }
+
+        // 拖拽经过
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // 拖拽进入
+        function handleDragEnter(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const seat = e.target.closest('.seat');
+            if (seat) {
+                seat.classList.add('drag-over');
+            }
+        }
+
+        // 拖拽离开
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const seat = e.target.closest('.seat');
+            if (seat) {
+                seat.classList.remove('drag-over');
+            }
+        }
+
+        // 拖拽放下
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const seat = e.target.closest('.seat');
+            if (!seat) return;
+            
+            const targetRow = parseInt(seat.getAttribute('data-row'));
+            const targetCol = parseInt(seat.getAttribute('data-col'));
+            
+            try {
+                const draggedData = JSON.parse(e.dataTransfer.getData('text/plain'));
+                
+                if (draggedData.studentId) {
+                    // 从学生卡片拖拽到座位
+                    const draggedStudentId = parseInt(draggedData.studentId);
+                    const currentSeat = document.querySelector(`[data-student-id="${draggedStudentId}"]`);
+                    
+                    if (currentSeat) {
+                        const currentSeatElement = currentSeat.closest('.seat');
+                        if (currentSeatElement) {
+                            const currentRow = parseInt(currentSeatElement.getAttribute('data-row'));
+                            const currentCol = parseInt(currentSeatElement.getAttribute('data-col'));
+                            
+                            // 交换座位
+                            const targetStudentId = currentArrangement[targetRow][targetCol];
+                            currentArrangement[currentRow][currentCol] = targetStudentId;
+                            currentArrangement[targetRow][targetCol] = draggedStudentId;
+                        }
+                    } else {
+                        // 直接放置到空座位
+                        currentArrangement[targetRow][targetCol] = draggedStudentId;
+                    }
+                } else if (draggedData.row !== undefined && draggedData.col !== undefined) {
+                    // 从座位拖拽到座位
+                    const sourceRow = parseInt(draggedData.row);
+                    const sourceCol = parseInt(draggedData.col);
+                    
+                    // 交换座位
+                    const sourceStudentId = currentArrangement[sourceRow][sourceCol];
+                    const targetStudentId = currentArrangement[targetRow][targetCol];
+                    
+                    currentArrangement[sourceRow][sourceCol] = targetStudentId;
+                    currentArrangement[targetRow][targetCol] = sourceStudentId;
+                }
+                
+                // 更新座位视图
+                renderClassroom();
+                
+                // 显示通知
+                showNotification('座位调整成功！', 'success');
+            } catch (error) {
+                console.error('拖拽数据解析失败:', error);
+            } finally {
+                // 清除拖拽状态
+                document.querySelectorAll('.dragging').forEach(el => {
+                    el.classList.remove('dragging');
+                });
+                document.querySelectorAll('.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+            }
+        }
+
+        // 渲染学生列表
+        function renderStudentsList() {
+            const searchTerm = studentSearch.value.toLowerCase();
+            const genderValue = genderFilter.value;
+            const scoreValue = scoreFilter.value;
+            
+            // 筛选学生
+            let filteredStudents = students.filter(student => {
+                const matchesSearch = student.name.toLowerCase().includes(searchTerm);
+                const matchesGender = genderValue === 'all' || student.gender === genderValue;
+                const matchesScore = scoreValue === 'all' || student.score === scoreValue;
+                
+                return matchesSearch && matchesGender && matchesScore;
+            });
+            
+            // 清空学生列表
+            studentsList.innerHTML = '';
+            
+            // 添加学生到列表
+            filteredStudents.forEach(student => {
+                const tr = document.createElement('tr');
+                
+                // 姓名
+                const nameTd = document.createElement('td');
+                nameTd.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
+                nameTd.textContent = student.name;
+                
+                // 性别
+                const genderTd = document.createElement('td');
+                genderTd.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                genderTd.textContent = student.gender === 'male' ? '男' : '女';
+                
+                // 身高
+                const heightTd = document.createElement('td');
+                heightTd.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                heightTd.textContent = `${student.height} cm`;
+                
+                // 成绩
+                const scoreTd = document.createElement('td');
+                scoreTd.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                const scoreDisplay = student.score === 'high' ? '优秀' : 
+                                   student.score === 'medium' ? '良好' : '待提高';
+                scoreTd.textContent = scoreDisplay;
+                
+                // 性格
+                const personalityTd = document.createElement('td');
+                personalityTd.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                const personalityDisplay = student.personality === 'active' ? '活泼' : 
+                                         student.personality === 'quiet' ? '安静' : '中性';
+                personalityTd.textContent = personalityDisplay;
+                
+                // 特殊需求
+                const specialNeedsTd = document.createElement('td');
+                specialNeedsTd.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                const specialNeedsDisplay = student.specialNeeds === 1 ? 
+                    (student.specialNeedsType === 'vision' ? '视力问题' : 
+                     student.specialNeedsType === 'hearing' ? '听力问题' : 
+                     student.specialNeedsType === 'mobility' ? '行动不便' : '其他') : '无';
+                specialNeedsTd.textContent = specialNeedsDisplay;
+                
+                // 操作
+                const actionsTd = document.createElement('td');
+                actionsTd.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium';
+                
+                const editBtn = document.createElement('button');
+                editBtn.className = 'text-primary hover:text-accent mr-3';
+                editBtn.innerHTML = '<i class="fa fa-pencil"></i> 编辑';
+                editBtn.addEventListener('click', () => editStudent(student.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'text-danger hover:text-red-700';
+                deleteBtn.innerHTML = '<i class="fa fa-trash"></i> 删除';
+                deleteBtn.addEventListener('click', () => deleteStudent(student.id));
+                
+                actionsTd.appendChild(editBtn);
+                actionsTd.appendChild(deleteBtn);
+                
+                tr.appendChild(nameTd);
+                tr.appendChild(genderTd);
+                tr.appendChild(heightTd);
+                tr.appendChild(scoreTd);
+                tr.appendChild(personalityTd);
+                tr.appendChild(specialNeedsTd);
+                tr.appendChild(actionsTd);
+                
+                studentsList.appendChild(tr);
+            });
+        }
+
+        // 渲染方案列表
+        function renderPlansList() {
+            // 清空方案列表
+            plansList.innerHTML = '';
+            
+            // 添加方案卡片
+            seatingPlans.forEach(plan => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden';
+                
+                // 方案头部
+                const header = document.createElement('div');
+                header.className = 'bg-gray-50 px-4 py-3 border-b border-gray-200';
+                
+                const name = document.createElement('h3');
+                name.className = 'text-md font-medium text-gray-900';
+                name.textContent = plan.name;
+                
+                const date = document.createElement('p');
+                date.className = 'text-xs text-gray-500 mt-1';
+                date.textContent = `创建日期: ${plan.date}`;
+                
+                header.appendChild(name);
+                header.appendChild(date);
+                
+                // 方案内容
+                const content = document.createElement('div');
+                content.className = 'p-4';
+                
+                const description = document.createElement('p');
+                description.className = 'text-sm text-gray-600 mb-4';
+                description.textContent = plan.description;
+                
+                // 座位预览
+                const preview = document.createElement('div');
+                preview.className = 'grid grid-cols-5 gap-1 mb-4';
+                
+                // 只显示前两排作为预览
+                for (let row = 0; row < Math.min(2, plan.arrangement.length); row++) {
+                    for (let col = 0; col < plan.arrangement[row].length; col++) {
+                        const seat = document.createElement('div');
+                        seat.className = 'bg-gray-100 rounded p-1 text-center';
+                        
+                        const studentId = plan.arrangement[row][col].studentId;
+                        if (studentId) {
+                            const student = students.find(s => s.id === studentId);
+                            if (student) {
+                                seat.className += student.gender === 'male' ? ' bg-blue-100' : ' bg-pink-100';
+                                seat.textContent = student.name.substring(0, 1);
+                            }
+                        }
+                        
+                        preview.appendChild(seat);
+                    }
+                }
+                
+                // 操作按钮
+                const actions = document.createElement('div');
+                actions.className = 'flex gap-2';
+                
+                const loadBtn = document.createElement('button');
+                loadBtn.className = 'btn-primary flex-1 text-sm py-1';
+                loadBtn.innerHTML = '<i class="fa fa-check mr-1"></i>使用';
+                loadBtn.addEventListener('click', () => loadPlan(plan.id));
+                
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'btn-secondary text-sm py-1 px-2';
+                downloadBtn.innerHTML = '<i class="fa fa-download"></i>';
+                downloadBtn.title = '下载方案';
+                downloadBtn.addEventListener('click', () => downloadPlan(plan.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn-danger text-sm py-1 px-2';
+                deleteBtn.innerHTML = '<i class="fa fa-trash"></i>';
+                deleteBtn.title = '删除方案';
+                deleteBtn.addEventListener('click', () => deletePlan(plan.id));
+                
+                actions.appendChild(loadBtn);
+                actions.appendChild(downloadBtn);
+                actions.appendChild(deleteBtn);
+                
+                content.appendChild(description);
+                content.appendChild(preview);
+                content.appendChild(actions);
+                
+                card.appendChild(header);
+                card.appendChild(content);
+                
+                plansList.appendChild(card);
+            });
+        }
+
+        // 添加学生
+        function addStudent(id, name, gender, height, score, personality, specialNeeds, specialNeedsType) {
+            const student = { id, name, gender, height, score, personality, specialNeeds, specialNeedsType };
+            students.push(student);
+            
+            // 更新学生列表
+            renderStudentsList();
+            
+            // 更新方案列表中的学生信息预览
+            renderPlansList();
+            
+            // 显示通知
+            showNotification('学生添加成功！', 'success');
+        }
+
+        // 编辑学生
+        function editStudent(id) {
+            const student = students.find(s => s.id === id);
+            
+            if (student) {
+                modalTitle.textContent = '编辑学生';
+                studentId.value = student.id;
+                studentName.value = student.name;
+                studentGender.value = student.gender;
+                studentHeight.value = student.height;
+                studentScore.value = student.score;
+                studentPersonality.value = student.personality;
+                
+                // 设置特殊需求
+                const specialNeedsSelect = document.getElementById('student-special-needs');
+                if (student.specialNeeds === 1) {
+                    if (student.specialNeedsType === 'vision') specialNeedsSelect.value = '1';
+                    else if (student.specialNeedsType === 'hearing') specialNeedsSelect.value = '2';
+                    else if (student.specialNeedsType === 'mobility') specialNeedsSelect.value = '3';
+                    else specialNeedsSelect.value = '4';
+                } else {
+                    specialNeedsSelect.value = '0';
+                }
+                
+                currentStudentId = id;
+                studentModal.classList.remove('hidden');
+            }
+        }
+
+        // 更新学生
+        function updateStudent(id, name, gender, height, score, personality, specialNeeds, specialNeedsType) {
+            const index = students.findIndex(s => s.id === id);
+            
+            if (index !== -1) {
+                students[index] = { id, name, gender, height, score, personality, specialNeeds, specialNeedsType };
+                
+                // 更新学生列表
+                renderStudentsList();
+                
+                // 更新座位视图
+                renderClassroom();
+                
+                // 更新方案列表中的学生信息预览
+                renderPlansList();
+                
+                // 显示通知
+                showNotification('学生信息更新成功！', 'success');
+            }
+        }
+
+        // 删除学生
+        function deleteStudent(id) {
+            if (confirm('确定要删除这名学生吗？')) {
+                students = students.filter(s => s.id !== id);
+                
+                // 从座位安排中移除该学生
+                for (let row = 0; row < currentArrangement.length; row++) {
+                    for (let col = 0; col < currentArrangement[row].length; col++) {
+                        if (currentArrangement[row][col] === id) {
+                            currentArrangement[row][col] = null;
+                        }
+                    }
+                }
+                
+                // 从所有保存的方案中移除该学生
+                seatingPlans.forEach(plan => {
+                    for (let row = 0; row < plan.arrangement.length; row++) {
+                        for (let col = 0; col < plan.arrangement[row].length; col++) {
+                            if (plan.arrangement[row][col].studentId === id) {
+                                plan.arrangement[row][col].studentId = null;
+                            }
+                        }
+                    }
+                });
+                
+                // 更新学生列表
+                renderStudentsList();
+                
+                // 更新座位视图
+                renderClassroom();
+                
+                // 更新方案列表
+                renderPlansList();
+                
+                // 显示通知
+                showNotification('学生删除成功！', 'success');
+            }
+        }
+
+        // 自动排座
+        function autoArrange() {
+            // 显示加载动画
+            showLoadingAnimation();
+            
+            // 使用setTimeout让动画有时间显示
+            setTimeout(() => {
+                // 初始化座位安排
+                currentArrangement = Array(5).fill().map(() => Array(5).fill(null));
+                
+                // 应用新的排座算法
+                applyNewSeatingAlgorithm();
+                
+                // 更新座位视图
+                renderClassroom();
+                
+                // 隐藏加载动画
+                hideLoadingAnimation();
+                
+                // 显示通知
+                showNotification('智能排座完成！', 'success');
+            }, 800);
+        }
+
+        // 应用新的排座算法 - 根据选择的维度动态调整
+        function applyNewSeatingAlgorithm() {
+            console.log('根据选择的维度进行排座:', Array.from(selectedDimensions));
+            
+            // 第一步：预处理 - 特殊需求学生优先分配（始终执行）
+            if (selectedDimensions.has('specialNeeds')) {
+                const specialNeedsStudents = students.filter(s => s.specialNeeds === 1);
+                assignSpecialNeedsSeats(specialNeedsStudents);
+            }
+            
+            // 获取剩余未分配的学生
+            const assignedIds = new Set();
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    if (currentArrangement[row][col] !== null) {
+                        assignedIds.add(currentArrangement[row][col]);
+                    }
+                }
+            }
+            const unassignedStudents = students.filter(s => !assignedIds.has(s.id));
+            
+            // 如果没有选择任何维度或只有特殊需求，使用随机排座
+            if (selectedDimensions.size === 0 || (selectedDimensions.size === 1 && selectedDimensions.has('specialNeeds'))) {
+                randomArrange(unassignedStudents);
+                return;
+            }
+            
+            // 根据选择的维度执行相应的排座逻辑
+            if (selectedDimensions.has('height')) {
+                // 按身高分组
+                const heightGroups = assignHeightGroups(unassignedStudents);
+                
+                if (selectedDimensions.has('gender') && selectedDimensions.has('score')) {
+                    // 身高+性别+成绩综合排座
+                    arrangeByHeightGenderScore(heightGroups);
+                } else if (selectedDimensions.has('gender')) {
+                    // 身高+性别排座
+                    arrangeByHeightAndGender(heightGroups);
+                } else if (selectedDimensions.has('score')) {
+                    // 身高+成绩排座
+                    arrangeByHeightAndScore(heightGroups);
+                } else {
+                    // 仅按身高排座
+                    arrangeByHeight(heightGroups);
+                }
+            } else if (selectedDimensions.has('gender') && selectedDimensions.has('score')) {
+                // 性别+成绩排座
+                arrangeByGenderAndScore(unassignedStudents);
+            } else if (selectedDimensions.has('gender')) {
+                // 仅按性别排座
+                arrangeByGender(unassignedStudents);
+            } else if (selectedDimensions.has('score')) {
+                // 仅按成绩排座
+                arrangeByScore(unassignedStudents);
+            }
+            
+            // 如果选择了性格维度，进行性格优化
+            if (selectedDimensions.has('personality')) {
+                optimizePersonality();
+            }
+            
+            // 如果选择了性别维度，进行性别均衡优化
+            if (selectedDimensions.has('gender')) {
+                optimizeGenderBalance();
+            }
+        }
+
+        // 预处理：为特殊需求学生分配座位
+        function assignSpecialNeedsSeats(specialStudents) {
+            specialStudents.forEach(student => {
+                let targetRow, targetCol;
+                
+                if (student.specialNeedsType === 'vision') {
+                    // 视力问题：前排1-2排，中间列
+                    targetRow = Math.floor(Math.random() * 2); // 0或1
+                    targetCol = 2; // 中间列
+                } else if (student.specialNeedsType === 'hearing') {
+                    // 听力问题：前排1-2排，靠近中间
+                    targetRow = Math.floor(Math.random() * 2); // 0或1
+                    targetCol = 1 + Math.floor(Math.random() * 3); // 1,2,3
+                } else if (student.specialNeedsType === 'mobility') {
+                    // 行动不便：靠近通道的位置
+                    targetRow = Math.floor(Math.random() * 5); // 任何行
+                    targetCol = [0, 4][Math.floor(Math.random() * 2)]; // 最左或最右列
+                } else {
+                    // 其他特殊需求：前排
+                    targetRow = Math.floor(Math.random() * 3); // 0,1,2
+                    targetCol = Math.floor(Math.random() * 5); // 任何列
+                }
+                
+                // 检查位置是否可用，如果不可用，找附近的位置
+                if (currentArrangement[targetRow][targetCol] === null) {
+                    currentArrangement[targetRow][targetCol] = student.id;
+                } else {
+                    // 寻找附近可用位置
+                    for (let r = Math.max(0, targetRow - 1); r <= Math.min(4, targetRow + 1); r++) {
+                        for (let c = Math.max(0, targetCol - 1); c <= Math.min(4, targetCol + 1); c++) {
+                            if (currentArrangement[r][c] === null) {
+                                currentArrangement[r][c] = student.id;
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // 如果附近没有位置，找任何可用位置
+                    for (let r = 0; r < 5; r++) {
+                        for (let c = 0; c < 5; c++) {
+                            if (currentArrangement[r][c] === null) {
+                                currentArrangement[r][c] = student.id;
+                                return;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 按身高将学生分为4档
+        function assignHeightGroups(students) {
+            // 按身高排序
+            const sortedStudents = [...students].sort((a, b) => a.height - b.height);
+            const totalStudents = sortedStudents.length;
+            
+            // 计算分位点
+            const q25 = Math.floor(totalStudents * 0.25);
+            const q50 = Math.floor(totalStudents * 0.5);
+            const q75 = Math.floor(totalStudents * 0.75);
+            
+            // 分为4档
+            return {
+                short: sortedStudents.slice(0, q25), // 1档：≤25百分位
+                mediumShort: sortedStudents.slice(q25, q50), // 2档：26%-50百分位
+                mediumTall: sortedStudents.slice(q50, q75), // 3档：51%-75百分位
+                tall: sortedStudents.slice(q75) // 4档：≥76百分位
+            };
+        }
+
+        // 简化的排座函数（供内部调用）
+        function randomArrange(students) {
+            const shuffledStudents = [...students];
+            shuffleArray(shuffledStudents);
+            
+            let index = 0;
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    if (currentArrangement[row][col] === null && index < shuffledStudents.length) {
+                        currentArrangement[row][col] = shuffledStudents[index].id;
+                        index++;
+                    }
+                }
+            }
+        }
+
+        // 仅按身高排座
+        function arrangeByHeight(heightGroups) {
+            // 定义座位优先级（前排中间位置优先）
+            const seatPriorities = getSeatPriorities();
+            
+            // 为不同身高组分配座位区域
+            const heightGroupAssignments = {
+                short: [0, 1], // 矮个子坐前排
+                mediumShort: [2], // 偏矮坐中排
+                mediumTall: [3], // 偏高坐中后排
+                tall: [4] // 高个子坐后排
+            };
+            
+            // 为每个身高组分配座位
+            Object.entries(heightGroupAssignments).forEach(([groupName, targetRows]) => {
+                const groupStudents = heightGroups[groupName];
+                if (!groupStudents || groupStudents.length === 0) return;
+                
+                // 筛选该组可用的座位
+                const availableSeats = seatPriorities.filter(seat => 
+                    targetRows.includes(seat.row) && 
+                    currentArrangement[seat.row][seat.col] === null
+                );
+                
+                // 打乱学生顺序，增加随机性
+                shuffleArray(groupStudents);
+                
+                // 为学生分配座位
+                groupStudents.forEach(student => {
+                    const seat = availableSeats.find(s => currentArrangement[s.row][s.col] === null);
+                    if (seat) {
+                        currentArrangement[seat.row][seat.col] = student.id;
+                    }
+                });
+            });
+            
+            // 填充剩余座位
+            fillRemainingSeats(seatPriorities);
+        }
+
+        // 身高+性别排座
+        function arrangeByHeightAndGender(heightGroups) {
+            // 定义座位优先级
+            const seatPriorities = getSeatPriorities();
+            
+            // 为每个身高组内部按性别分配座位
+            Object.values(heightGroups).forEach(groupStudents => {
+                if (!groupStudents || groupStudents.length === 0) return;
+                
+                // 按性别分组
+                const males = groupStudents.filter(s => s.gender === 'male');
+                const females = groupStudents.filter(s => s.gender === 'female');
+                
+                // 打乱顺序
+                shuffleArray(males);
+                shuffleArray(females);
+                
+                // 交替分配男女生
+                let maleIndex = 0, femaleIndex = 0;
+                for (const seat of seatPriorities) {
+                    if (currentArrangement[seat.row][seat.col] !== null) continue;
+                    
+                    if (maleIndex < males.length && femaleIndex < females.length) {
+                        // 交替分配
+                        if (Math.random() > 0.5) {
+                            currentArrangement[seat.row][seat.col] = males[maleIndex].id;
+                            maleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = females[femaleIndex].id;
+                            femaleIndex++;
+                        }
+                    } else if (maleIndex < males.length) {
+                        currentArrangement[seat.row][seat.col] = males[maleIndex].id;
+                        maleIndex++;
+                    } else if (femaleIndex < females.length) {
+                        currentArrangement[seat.row][seat.col] = females[femaleIndex].id;
+                        femaleIndex++;
+                    }
+                }
+            });
+        }
+
+        // 身高+成绩排座
+        function arrangeByHeightAndScore(heightGroups) {
+            // 定义座位优先级
+            const seatPriorities = getSeatPriorities();
+            
+            // 为每个身高组内部按成绩分配座位
+            Object.values(heightGroups).forEach(groupStudents => {
+                if (!groupStudents || groupStudents.length === 0) return;
+                
+                // 按成绩分组
+                const highScore = groupStudents.filter(s => s.score === 'high');
+                const mediumScore = groupStudents.filter(s => s.score === 'medium');
+                const lowScore = groupStudents.filter(s => s.score === 'low');
+                
+                // 打乱顺序
+                shuffleArray(highScore);
+                shuffleArray(mediumScore);
+                shuffleArray(lowScore);
+                
+                // 高分学生优先分配好位置
+                let highIndex = 0, mediumIndex = 0, lowIndex = 0;
+                for (const seat of seatPriorities) {
+                    if (currentArrangement[seat.row][seat.col] !== null) continue;
+                    
+                    if (highIndex < highScore.length) {
+                        currentArrangement[seat.row][seat.col] = highScore[highIndex].id;
+                        highIndex++;
+                    } else if (mediumIndex < mediumScore.length) {
+                        currentArrangement[seat.row][seat.col] = mediumScore[mediumIndex].id;
+                        mediumIndex++;
+                    } else if (lowIndex < lowScore.length) {
+                        currentArrangement[seat.row][seat.col] = lowScore[lowIndex].id;
+                        lowIndex++;
+                    }
+                }
+            });
+        }
+
+        // 身高+性别+成绩综合排座
+        function arrangeByHeightGenderScore(heightGroups) {
+            // 定义座位优先级
+            const seatPriorities = getSeatPriorities();
+            
+            // 为每个身高组执行综合排座
+            Object.values(heightGroups).forEach(groupStudents => {
+                if (!groupStudents || groupStudents.length === 0) return;
+                
+                // 按成绩和性别分组
+                const groups = {
+                    high: {
+                        male: groupStudents.filter(s => s.score === 'high' && s.gender === 'male'),
+                        female: groupStudents.filter(s => s.score === 'high' && s.gender === 'female')
+                    },
+                    medium: {
+                        male: groupStudents.filter(s => s.score === 'medium' && s.gender === 'male'),
+                        female: groupStudents.filter(s => s.score === 'medium' && s.gender === 'female')
+                    },
+                    low: {
+                        male: groupStudents.filter(s => s.score === 'low' && s.gender === 'male'),
+                        female: groupStudents.filter(s => s.score === 'low' && s.gender === 'female')
+                    }
+                };
+                
+                // 打乱各组顺序
+                Object.values(groups).forEach(scoreGroup => {
+                    shuffleArray(scoreGroup.male);
+                    shuffleArray(scoreGroup.female);
+                });
+                
+                // 优先分配好位置给高分学生，并保持性别平衡
+                let highMaleIndex = 0, highFemaleIndex = 0;
+                let mediumMaleIndex = 0, mediumFemaleIndex = 0;
+                let lowMaleIndex = 0, lowFemaleIndex = 0;
+                
+                for (const seat of seatPriorities) {
+                    if (currentArrangement[seat.row][seat.col] !== null) continue;
+                    
+                    // 高分学生优先
+                    if (highMaleIndex < groups.high.male.length || highFemaleIndex < groups.high.female.length) {
+                        if (highMaleIndex < groups.high.male.length && highFemaleIndex < groups.high.female.length) {
+                            // 交替分配男女生
+                            if (Math.random() > 0.5) {
+                                currentArrangement[seat.row][seat.col] = groups.high.male[highMaleIndex].id;
+                                highMaleIndex++;
+                            } else {
+                                currentArrangement[seat.row][seat.col] = groups.high.female[highFemaleIndex].id;
+                                highFemaleIndex++;
+                            }
+                        } else if (highMaleIndex < groups.high.male.length) {
+                            currentArrangement[seat.row][seat.col] = groups.high.male[highMaleIndex].id;
+                            highMaleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = groups.high.female[highFemaleIndex].id;
+                            highFemaleIndex++;
+                        }
+                    }
+                    // 中等成绩学生
+                    else if (mediumMaleIndex < groups.medium.male.length || mediumFemaleIndex < groups.medium.female.length) {
+                        if (mediumMaleIndex < groups.medium.male.length && mediumFemaleIndex < groups.medium.female.length) {
+                            if (Math.random() > 0.5) {
+                                currentArrangement[seat.row][seat.col] = groups.medium.male[mediumMaleIndex].id;
+                                mediumMaleIndex++;
+                            } else {
+                                currentArrangement[seat.row][seat.col] = groups.medium.female[mediumFemaleIndex].id;
+                                mediumFemaleIndex++;
+                            }
+                        } else if (mediumMaleIndex < groups.medium.male.length) {
+                            currentArrangement[seat.row][seat.col] = groups.medium.male[mediumMaleIndex].id;
+                            mediumMaleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = groups.medium.female[mediumFemaleIndex].id;
+                            mediumFemaleIndex++;
+                        }
+                    }
+                    // 低分学生
+                    else if (lowMaleIndex < groups.low.male.length || lowFemaleIndex < groups.low.female.length) {
+                        if (lowMaleIndex < groups.low.male.length && lowFemaleIndex < groups.low.female.length) {
+                            if (Math.random() > 0.5) {
+                                currentArrangement[seat.row][seat.col] = groups.low.male[lowMaleIndex].id;
+                                lowMaleIndex++;
+                            } else {
+                                currentArrangement[seat.row][seat.col] = groups.low.female[lowFemaleIndex].id;
+                                lowFemaleIndex++;
+                            }
+                        } else if (lowMaleIndex < groups.low.male.length) {
+                            currentArrangement[seat.row][seat.col] = groups.low.male[lowMaleIndex].id;
+                            lowMaleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = groups.low.female[lowFemaleIndex].id;
+                            lowFemaleIndex++;
+                        }
+                    }
+                }
+            });
+        }
+
+        // 仅按性别排座
+        function arrangeByGender(students) {
+            const males = students.filter(s => s.gender === 'male');
+            const females = students.filter(s => s.gender === 'female');
+            
+            shuffleArray(males);
+            shuffleArray(females);
+            
+            const seatPriorities = getSeatPriorities();
+            let maleIndex = 0, femaleIndex = 0;
+            
+            for (const seat of seatPriorities) {
+                if (currentArrangement[seat.row][seat.col] !== null) continue;
+                
+                if (maleIndex < males.length && femaleIndex < females.length) {
+                    // 交替分配男女生
+                    if (Math.random() > 0.5) {
+                        currentArrangement[seat.row][seat.col] = males[maleIndex].id;
+                        maleIndex++;
+                    } else {
+                        currentArrangement[seat.row][seat.col] = females[femaleIndex].id;
+                        femaleIndex++;
+                    }
+                } else if (maleIndex < males.length) {
+                    currentArrangement[seat.row][seat.col] = males[maleIndex].id;
+                    maleIndex++;
+                } else if (femaleIndex < females.length) {
+                    currentArrangement[seat.row][seat.col] = females[femaleIndex].id;
+                    femaleIndex++;
+                }
+            }
+        }
+
+        // 仅按成绩排座
+        function arrangeByScore(students) {
+            const highScore = students.filter(s => s.score === 'high');
+            const mediumScore = students.filter(s => s.score === 'medium');
+            const lowScore = students.filter(s => s.score === 'low');
+            
+            shuffleArray(highScore);
+            shuffleArray(mediumScore);
+            shuffleArray(lowScore);
+            
+            const seatPriorities = getSeatPriorities();
+            let highIndex = 0, mediumIndex = 0, lowIndex = 0;
+            
+            for (const seat of seatPriorities) {
+                if (currentArrangement[seat.row][seat.col] !== null) continue;
+                
+                if (highIndex < highScore.length) {
+                    currentArrangement[seat.row][seat.col] = highScore[highIndex].id;
+                    highIndex++;
+                } else if (mediumIndex < mediumScore.length) {
+                    currentArrangement[seat.row][seat.col] = mediumScore[mediumIndex].id;
+                    mediumIndex++;
+                } else if (lowIndex < lowScore.length) {
+                    currentArrangement[seat.row][seat.col] = lowScore[lowIndex].id;
+                    lowIndex++;
+                }
+            }
+        }
+
+        // 性别+成绩排座
+        function arrangeByGenderAndScore(students) {
+            // 按成绩和性别分组
+            const groups = {
+                high: {
+                    male: students.filter(s => s.score === 'high' && s.gender === 'male'),
+                    female: students.filter(s => s.score === 'high' && s.gender === 'female')
+                },
+                medium: {
+                    male: students.filter(s => s.score === 'medium' && s.gender === 'male'),
+                    female: students.filter(s => s.score === 'medium' && s.gender === 'female')
+                },
+                low: {
+                    male: students.filter(s => s.score === 'low' && s.gender === 'male'),
+                    female: students.filter(s => s.score === 'low' && s.gender === 'female')
+                }
+            };
+            
+            // 打乱各组顺序
+            Object.values(groups).forEach(scoreGroup => {
+                shuffleArray(scoreGroup.male);
+                shuffleArray(scoreGroup.female);
+            });
+            
+            const seatPriorities = getSeatPriorities();
+            let highMaleIndex = 0, highFemaleIndex = 0;
+            let mediumMaleIndex = 0, mediumFemaleIndex = 0;
+            let lowMaleIndex = 0, lowFemaleIndex = 0;
+            
+            for (const seat of seatPriorities) {
+                if (currentArrangement[seat.row][seat.col] !== null) continue;
+                
+                // 高分学生优先
+                if (highMaleIndex < groups.high.male.length || highFemaleIndex < groups.high.female.length) {
+                    if (highMaleIndex < groups.high.male.length && highFemaleIndex < groups.high.female.length) {
+                        // 交替分配男女生
+                        if (Math.random() > 0.5) {
+                            currentArrangement[seat.row][seat.col] = groups.high.male[highMaleIndex].id;
+                            highMaleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = groups.high.female[highFemaleIndex].id;
+                            highFemaleIndex++;
+                        }
+                    } else if (highMaleIndex < groups.high.male.length) {
+                        currentArrangement[seat.row][seat.col] = groups.high.male[highMaleIndex].id;
+                        highMaleIndex++;
+                    } else {
+                        currentArrangement[seat.row][seat.col] = groups.high.female[highFemaleIndex].id;
+                        highFemaleIndex++;
+                    }
+                }
+                // 中等成绩学生
+                else if (mediumMaleIndex < groups.medium.male.length || mediumFemaleIndex < groups.medium.female.length) {
+                    if (mediumMaleIndex < groups.medium.male.length && mediumFemaleIndex < groups.medium.female.length) {
+                        if (Math.random() > 0.5) {
+                            currentArrangement[seat.row][seat.col] = groups.medium.male[mediumMaleIndex].id;
+                            mediumMaleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = groups.medium.female[mediumFemaleIndex].id;
+                            mediumFemaleIndex++;
+                        }
+                    } else if (mediumMaleIndex < groups.medium.male.length) {
+                        currentArrangement[seat.row][seat.col] = groups.medium.male[mediumMaleIndex].id;
+                        mediumMaleIndex++;
+                    } else {
+                        currentArrangement[seat.row][seat.col] = groups.medium.female[mediumFemaleIndex].id;
+                        mediumFemaleIndex++;
+                    }
+                }
+                // 低分学生
+                else if (lowMaleIndex < groups.low.male.length || lowFemaleIndex < groups.low.female.length) {
+                    if (lowMaleIndex < groups.low.male.length && lowFemaleIndex < groups.low.female.length) {
+                        if (Math.random() > 0.5) {
+                            currentArrangement[seat.row][seat.col] = groups.low.male[lowMaleIndex].id;
+                            lowMaleIndex++;
+                        } else {
+                            currentArrangement[seat.row][seat.col] = groups.low.female[lowFemaleIndex].id;
+                            lowFemaleIndex++;
+                        }
+                    } else if (lowMaleIndex < groups.low.male.length) {
+                        currentArrangement[seat.row][seat.col] = groups.low.male[lowMaleIndex].id;
+                        lowMaleIndex++;
+                    } else {
+                        currentArrangement[seat.row][seat.col] = groups.low.female[lowFemaleIndex].id;
+                        lowFemaleIndex++;
+                    }
+                }
+            }
+        }
+
+        // 获取座位优先级
+        function getSeatPriorities() {
+            const seatPriorities = [];
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    if (currentArrangement[row][col] !== null) continue;
+                    
+                    // 计算优先级分数：前排优先，中间优先
+                    const rowScore = (4 - row) * 2; // 前排分数高
+                    const colScore = Math.abs(2 - col) * -1; // 中间位置分数高
+                    seatPriorities.push({ row, col, score: rowScore + colScore });
+                }
+            }
+            
+            // 按优先级排序座位
+            return seatPriorities.sort((a, b) => b.score - a.score);
+        }
+
+        // 填充剩余座位
+        function fillRemainingSeats(seatPriorities) {
+            // 收集未分配的学生
+            const assignedIds = new Set();
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 5; col++) {
+                    if (currentArrangement[row][col] !== null) {
+                        assignedIds.add(currentArrangement[row][col]);
+                    }
+                }
+            }
+            
+            const unassignedStudents = students.filter(s => !assignedIds.has(s.id));
+            
+            // 按优先级填充剩余座位
+            let seatIndex = 0;
+            for (const student of unassignedStudents) {
+                // 找到下一个可用座位
+                while (seatIndex < seatPriorities.length) {
+                    const seat = seatPriorities[seatIndex];
+                    if (currentArrangement[seat.row][seat.col] === null) {
+                        currentArrangement[seat.row][seat.col] = student.id;
+                        seatIndex++;
+                        break;
+                    }
+                    seatIndex++;
+                }
+            }
+        }
+
+        // 性别均衡优化
+        function optimizeGenderBalance() {
+            // 检查每行的性别分布
+            for (let row = 0; row < 5; row++) {
+                const rowStudents = [];
+                for (let col = 0; col < 5; col++) {
+                    if (currentArrangement[row][col] !== null) {
+                        const student = students.find(s => s.id === currentArrangement[row][col]);
+                        if (student) {
+                            rowStudents.push({ ...student, col });
+                        }
+                    }
+                }
+                
+                // 如果该行学生太少，跳过
+                if (rowStudents.length < 3) continue;
+                
+                // 计算性别分布
+                const maleCount = rowStudents.filter(s => s.gender === 'male').length;
+                const femaleCount = rowStudents.length - maleCount;
+                
+                // 如果性别严重失衡，进行调整
+                const maxCount = Math.max(maleCount, femaleCount);
+                if (maxCount > rowStudents.length * 0.7) {
+                    // 寻找其他行中性别互补的学生进行交换
+                    for (let otherRow = 0; otherRow < 5; otherRow++) {
+                        if (otherRow === row) continue;
+                        
+                        for (let otherCol = 0; otherCol < 5; otherCol++) {
+                            const otherStudentId = currentArrangement[otherRow][otherCol];
+                            if (!otherStudentId) continue;
+                            
+                            const otherStudent = students.find(s => s.id === otherStudentId);
+                            if (!otherStudent) continue;
+                            
+                            // 寻找当前行中性别过多的学生
+                            const targetGender = maleCount > femaleCount ? 'male' : 'female';
+                            const targetStudent = rowStudents.find(s => s.gender === targetGender);
+                            if (!targetStudent) continue;
+                            
+                            // 如果其他学生性别互补，进行交换
+                            if (otherStudent.gender !== targetGender) {
+                                // 交换学生
+                                currentArrangement[row][targetStudent.col] = otherStudent.id;
+                                currentArrangement[otherRow][otherCol] = targetStudent.id;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 性格优化
+        function optimizePersonality() {
+            // 简单的性格互补优化
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 4; col++) {
+                    if (currentArrangement[row][col] && currentArrangement[row][col + 1]) {
+                        const student1 = students.find(s => s.id === currentArrangement[row][col]);
+                        const student2 = students.find(s => s.id === currentArrangement[row][col + 1]);
+                        
+                        // 如果两个学生都是外向或都是内向，尝试交换
+                        if ((student1.personality === 'active' && student2.personality === 'active') ||
+                            (student1.personality === 'quiet' && student2.personality === 'quiet')) {
+                            
+                            // 寻找一个性格不同的学生进行交换
+                            for (let r = 0; r < 5; r++) {
+                                for (let c = 0; c < 5; c++) {
+                                    if ((r !== row || c !== col) && currentArrangement[r][c]) {
+                                        const student3 = students.find(s => s.id === currentArrangement[r][c]);
+                                        
+                                        if (student3.personality !== student1.personality) {
+                                            // 交换学生
+                                            const temp = currentArrangement[row][col + 1];
+                                            currentArrangement[row][col + 1] = currentArrangement[r][c];
+                                            currentArrangement[r][c] = temp;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 保存座位方案
+        function savePlan(name, description) {
+            const arrangement = [];
+            
+            // 转换当前座位安排格式
+            for (let row = 0; row < 5; row++) {
+                const rowArrangement = [];
+                
+                for (let col = 0; col < 5; col++) {
+                    rowArrangement.push({
+                        row,
+                        col,
+                        studentId: currentArrangement[row][col]
+                    });
+                }
+                
+                arrangement.push(rowArrangement);
+            }
+            
+            const plan = {
+                id: Date.now(),
+                name,
+                description,
+                date: new Date().toISOString().split('T')[0],
+                arrangement
+            };
+            
+            seatingPlans.push(plan);
+            
+            // 更新方案列表
+            renderPlansList();
+            
+            // 显示通知
+            showNotification('座位方案保存成功！', 'success');
+        }
+
+        // 加载座位方案
+        function loadPlan(id) {
+            const plan = seatingPlans.find(p => p.id === id);
+            
+            if (plan) {
+                // 转换方案格式
+                currentArrangement = Array(5).fill().map(() => Array(5).fill(null));
+                
+                plan.arrangement.forEach(row => {
+                    row.forEach(seat => {
+                        currentArrangement[seat.row][seat.col] = seat.studentId;
+                    });
+                });
+                
+                // 更新座位视图
+                renderClassroom();
+                
+                // 设置当前方案ID
+                currentPlanId = id;
+                
+                // 显示通知
+                showNotification(`方案「${plan.name}」加载成功！`, 'success');
+            }
+        }
+
+        // 删除座位方案
+        function deletePlan(id) {
+            if (confirm('确定要删除这个座位方案吗？')) {
+                seatingPlans = seatingPlans.filter(p => p.id !== id);
+                
+                // 如果删除的是当前方案，清空座位安排
+                if (currentPlanId === id) {
+                    currentArrangement = Array(5).fill().map(() => Array(5).fill(null));
+                    renderClassroom();
+                    currentPlanId = null;
+                }
+                
+                // 更新方案列表
+                renderPlansList();
+                
+                // 显示通知
+                showNotification('座位方案删除成功！', 'success');
+            }
+        }
+
+        // 显示加载动画
+        function showLoadingAnimation() {
+            const classroomGrid = document.getElementById('classroom-grid');
+            
+            // 创建加载遮罩
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.id = 'loading-overlay';
+            loadingOverlay.className = 'absolute inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50 rounded-lg';
+            loadingOverlay.innerHTML = `
+                <div class="flex flex-col items-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    <p class="mt-3 text-gray-700">正在智能排座...</p>
+                </div>
+            `;
+            
+            // 添加到教室网格
+            classroomGrid.style.position = 'relative';
+            classroomGrid.appendChild(loadingOverlay);
+        }
+
+        // 隐藏加载动画
+        function hideLoadingAnimation() {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.remove();
+            }
+        }
+
+        // 显示学生信息模态框
+        function showStudentInfo(student) {
+            // 创建模态框
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            
+            // 模态框内容
+            const modalContent = document.createElement('div');
+            modalContent.className = 'bg-white rounded-lg shadow-xl max-w-md w-full mx-4';
+            
+            // 模态框头部
+            const modalHeader = document.createElement('div');
+            modalHeader.className = 'border-b px-6 py-4 flex justify-between items-center';
+            
+            const modalTitle = document.createElement('h3');
+            modalTitle.className = 'text-lg font-medium text-gray-900';
+            modalTitle.textContent = `${student.name} 的个人信息`;
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'text-gray-400 hover:text-gray-500';
+            closeBtn.innerHTML = '<i class="fa fa-times"></i>';
+            closeBtn.addEventListener('click', () => modal.remove());
+            
+            modalHeader.appendChild(modalTitle);
+            modalHeader.appendChild(closeBtn);
+            
+            // 模态框内容
+            const modalBody = document.createElement('div');
+            modalBody.className = 'px-6 py-4';
+            
+            // 学生信息表格
+            const infoTable = document.createElement('table');
+            infoTable.className = 'w-full';
+            
+            // 性别
+            const genderRow = document.createElement('tr');
+            genderRow.innerHTML = `
+                <td class="py-2 text-gray-600">性别：</td>
+                <td class="py-2 font-medium">${student.gender === 'male' ? '男' : '女'}</td>
+            `;
+            
+            // 身高
+            const heightRow = document.createElement('tr');
+            heightRow.innerHTML = `
+                <td class="py-2 text-gray-600">身高：</td>
+                <td class="py-2 font-medium">${student.height} cm</td>
+            `;
+            
+            // 成绩
+            const scoreRow = document.createElement('tr');
+            const scoreDisplay = student.score === 'high' ? '优秀' : 
+                               student.score === 'medium' ? '良好' : '待提高';
+            scoreRow.innerHTML = `
+                <td class="py-2 text-gray-600">成绩：</td>
+                <td class="py-2 font-medium">${scoreDisplay}</td>
+            `;
+            
+            // 性格
+            const personalityRow = document.createElement('tr');
+            const personalityDisplay = student.personality === 'active' ? '活泼' : 
+                                     student.personality === 'quiet' ? '安静' : '中性';
+            personalityRow.innerHTML = `
+                <td class="py-2 text-gray-600">性格：</td>
+                <td class="py-2 font-medium">${personalityDisplay}</td>
+            `;
+            
+            // 特殊需求
+            const specialNeedsRow = document.createElement('tr');
+            let specialNeedsDisplay = '无';
+            if (student.specialNeeds === 1) {
+                if (student.specialNeedsType === 'vision') specialNeedsDisplay = '视力问题';
+                else if (student.specialNeedsType === 'hearing') specialNeedsDisplay = '听力问题';
+                else if (student.specialNeedsType === 'mobility') specialNeedsDisplay = '行动不便';
+                else specialNeedsDisplay = '其他';
+            }
+            specialNeedsRow.innerHTML = `
+                <td class="py-2 text-gray-600">特殊需求：</td>
+                <td class="py-2 font-medium">${specialNeedsDisplay}</td>
+            `;
+            
+            // 添加行到表格
+            infoTable.appendChild(genderRow);
+            infoTable.appendChild(heightRow);
+            infoTable.appendChild(scoreRow);
+            infoTable.appendChild(personalityRow);
+            infoTable.appendChild(specialNeedsRow);
+            
+            modalBody.appendChild(infoTable);
+            
+            // 模态框底部
+            const modalFooter = document.createElement('div');
+            modalFooter.className = 'bg-gray-50 px-6 py-4 flex justify-end';
+            
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn-primary';
+            editBtn.innerHTML = '<i class="fa fa-pencil mr-2"></i>编辑信息';
+            editBtn.addEventListener('click', () => {
+                modal.remove();
+                editStudent(student.id);
+            });
+            
+            modalFooter.appendChild(editBtn);
+            
+            // 组装模态框
+            modalContent.appendChild(modalHeader);
+            modalContent.appendChild(modalBody);
+            modalContent.appendChild(modalFooter);
+            modal.appendChild(modalContent);
+            
+            // 添加到文档
+            document.body.appendChild(modal);
+            
+            // 点击模态框外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            
+            // 通知图标
+            let icon = 'info-circle';
+            if (type === 'success') icon = 'check-circle';
+            else if (type === 'error') icon = 'exclamation-circle';
+            else if (type === 'warning') icon = 'exclamation-triangle';
+            
+            notification.innerHTML = `
+                <div class="flex-shrink-0">
+                    <i class="fa fa-${icon} text-${type === 'success' ? 'green' : type === 'error' ? 'red' : type === 'warning' ? 'yellow' : 'blue'}-500 text-xl"></i>
+                </div>
+                <div class="ml-3 w-0 flex-1">
+                    <p class="text-sm font-medium text-gray-900">${message}</p>
+                </div>
+                <div class="ml-4 flex-shrink-0 flex">
+                    <button class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none">
+                        <span class="sr-only">关闭</span>
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            // 添加到文档
+            document.body.appendChild(notification);
+            
+            // 关闭按钮事件
+            notification.querySelector('button').addEventListener('click', () => {
+                notification.remove();
+            });
+            
+            // 自动关闭
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(calc(100% + 1rem))';
+                
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        // 打乱数组
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+    </script>
+</body>
+</html>

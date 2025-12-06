@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小鸭子游泳比赛 - 全屏版</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <!-- ExcelJS for Excel parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6', // 浅蓝色
+                        secondary: '#FBBF24', // 黄色
+                        success: '#10B981', // 绿色
+                        danger: '#EF4444', // 红色
+                        neutral: '#F3F4F6', // 浅灰色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'swim': 'swim var(--swim-duration) ease-out forwards',
+                        'bounce': 'bounce 0.5s ease-in-out',
+                    },
+                    keyframes: {
+                        swim: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(var(--target-position))' },
+                        },
+                        bounce: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .duck-container {
+                position: relative;
+                height: 80px;
+                margin-bottom: 16px;
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+            }
+            .duck-container:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+            .duck-lane {
+                position: relative;
+                height: 100%;
+                background: linear-gradient(90deg, #DBEAFE 0%, #BFDBFE 100%);
+                border-radius: 12px;
+            }
+            .duck {
+                position: absolute;
+                top: 50%;
+                left: 0;
+                transform: translateY(-50%);
+                width: 60px;
+                height: 60px;
+                transition: transform 0.3s ease;
+                cursor: pointer;
+                z-index: 10;
+                filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.07));
+            }
+            .duck:hover {
+                transform: translateY(-50%) scale(1.1);
+                animation: bounce 0.5s ease-in-out;
+            }
+            .duck-name {
+                position: absolute;
+                top: 50%;
+                left: 70px;
+                transform: translateY(-50%);
+                font-weight: 600;
+                z-index: 5;
+                font-size: 16px;
+                color: #1F2937;
+            }
+            .duck-score {
+                position: absolute;
+                top: 50%;
+                right: 20px;
+                transform: translateY(-50%);
+                font-weight: 700;
+                z-index: 5;
+                font-size: 18px;
+                color: #1F2937;
+                background-color: rgba(255, 255, 255, 0.8);
+                padding: 4px 12px;
+                border-radius: 20px;
+            }
+            .class-average {
+                position: absolute;
+                top: 0;
+                height: 100%;
+                width: 3px;
+                background-color: rgba(239, 68, 68, 0.8);
+                z-index: 2;
+                box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+            }
+            .class-average::after {
+                content: '班级平均';
+                position: absolute;
+                top: -35px;
+                right: -60px;
+                font-size: 14px;
+                color: #EF4444;
+                white-space: nowrap;
+                background-color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .tooltip {
+                position: absolute;
+                background: white;
+                border-radius: 8px;
+                padding: 12px 16px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                z-index: 100;
+                display: none;
+                max-width: 300px;
+                font-size: 14px;
+                border: 1px solid #E5E7EB;
+            }
+            .tooltip::before {
+                content: '';
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                margin-left: -8px;
+                border-width: 8px;
+                border-style: solid;
+                border-color: white transparent transparent transparent;
+            }
+            .wave {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 30px;
+                background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="%233B82F6" fill-opacity="0.2" d="M0,192L48,197.3C96,203,192,213,288,229.3C384,245,480,267,576,250.7C672,235,768,181,864,181.3C960,181,1056,235,1152,234.7C1248,235,1344,181,1392,154.7L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+                background-size: 1440px 30px;
+                animation: wave 10s linear infinite;
+            }
+            @keyframes wave {
+                0% { background-position-x: 0; }
+                100% { background-position-x: 1440px; }
+            }
+            .duck-shadow {
+                position: absolute;
+                bottom: 10px;
+                width: 40px;
+                height: 8px;
+                background-color: rgba(0, 0, 0, 0.2);
+                border-radius: 50%;
+                left: 10px;
+                transition: width 0.3s ease, left 0.3s ease;
+            }
+            .duck:hover + .duck-shadow {
+                width: 45px;
+                left: 7.5px;
+            }
+            .loading-spinner {
+                border: 4px solid rgba(0, 0, 0, 0.1);
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                border-left-color: #3B82F6;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .file-drop-area {
+                border: 3px dashed #CBD5E1;
+                border-radius: 12px;
+                padding: 40px;
+                text-align: center;
+                transition: all 0.3s ease;
+                background-color: #F9FAFB;
+            }
+            .file-drop-area:hover, .file-drop-area.dragover {
+                border-color: #3B82F6;
+                background-color: #EFF6FF;
+            }
+            .btn-primary {
+                @apply px-6 py-3 bg-primary text-white rounded-lg hover:bg-blue-600 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md hover:shadow-lg;
+            }
+            .btn-secondary {
+                @apply px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 shadow-md hover:shadow-lg;
+            }
+            .btn-success {
+                @apply px-6 py-3 bg-success text-white rounded-lg hover:bg-green-600 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 shadow-md hover:shadow-lg;
+            }
+            .race-container {
+                position: relative;
+                background: linear-gradient(180deg, #93C5FD 0%, #BFDBFE 100%);
+                border-radius: 16px;
+                padding: 30px;
+                overflow: hidden;
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            }
+            .race-header {
+                position: relative;
+                z-index: 5;
+            }
+            .race-title {
+                font-size: 28px;
+                font-weight: 800;
+                color: #1F2937;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .race-subtitle {
+                font-size: 16px;
+                color: #4B5563;
+                margin-top: 8px;
+            }
+            .speed-slider {
+                @apply w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer;
+            }
+            .speed-slider::-webkit-slider-thumb {
+                @apply appearance-none w-6 h-6 rounded-full bg-primary border-2 border-white cursor-pointer shadow-md;
+            }
+            .podium {
+                position: relative;
+                height: 120px;
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                margin-top: 30px;
+            }
+            .podium-step {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                position: relative;
+                transition: transform 0.3s ease;
+            }
+            .podium-step:hover {
+                transform: translateY(-5px);
+            }
+            .podium-base {
+                background-color: #3B82F6;
+                border-radius: 8px 8px 0 0;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                transition: background-color 0.3s ease;
+            }
+            .podium-step:hover .podium-base {
+                background-color: #2563EB;
+            }
+            .podium-label {
+                position: absolute;
+                bottom: -30px;
+                font-size: 16px;
+                font-weight: 600;
+                text-align: center;
+                width: 100%;
+                color: #1F2937;
+            }
+            .podium-medal {
+                position: absolute;
+                top: -40px;
+                font-size: 32px;
+                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            }
+            .podium-score {
+                position: absolute;
+                bottom: -60px;
+                font-size: 14px;
+                color: #6B7280;
+                text-align: center;
+                width: 100%;
+            }
+            .result-card {
+                @apply bg-white rounded-xl shadow-lg p-6 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-xl;
+            }
+            .trophy-icon {
+                font-size: 48px;
+                filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+            }
+            .confetti {
+                position: absolute;
+                width: 10px;
+                height: 10px;
+                background-color: #f00;
+                border-radius: 50%;
+                animation: confetti-fall 3s ease-in-out forwards;
+                z-index: 1000;
+            }
+            @keyframes confetti-fall {
+                0% {
+                    transform: translateY(-100vh) rotate(0deg);
+                    opacity: 1;
+                }
+                100% {
+                    transform: translateY(100vh) rotate(360deg);
+                    opacity: 0;
+                }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center mb-4 md:mb-0">
+                <img src="https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D" alt="小鸭子图标" class="w-12 h-12 mr-3">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">小鸭子游泳比赛</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="index.html" class="btn-secondary">
+                    <i class="fa fa-arrow-left mr-2"></i>
+                    <span>返回主系统</span>
+                </a>
+                <button id="helpBtn" class="btn-secondary">
+                    <i class="fa fa-question-circle mr-2"></i>
+                    <span>使用帮助</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区域 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 欢迎区域 -->
+        <section id="welcomeSection" class="flex flex-col items-center justify-center py-16">
+            <div class="text-center mb-12">
+                <img src="https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D" alt="小鸭子图标" class="w-32 h-32 mx-auto mb-6 animate-bounce">
+                <h2 class="text-4xl font-extrabold text-gray-800 mb-4">欢迎参加小鸭子游泳比赛！</h2>
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">上传您的学生成绩数据，让我们通过有趣的游泳比赛来可视化学生的学习表现。成绩越好的学生，他们的小鸭子会游得越快、越远！</p>
+            </div>
+            
+            <!-- 文件上传区域 -->
+            <div class="w-full max-w-3xl">
+                <div id="fileDropArea" class="file-drop-area">
+                    <i class="fa fa-cloud-upload text-5xl text-gray-400 mb-6"></i>
+                    <h3 class="text-2xl font-semibold text-gray-700 mb-3">拖放文件到此处或点击上传</h3>
+                    <p class="text-gray-500 mb-6">支持 CSV、Excel 格式的成绩数据文件</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls">
+                    <div class="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                        <button id="browseFiles" class="btn-primary">
+                            <i class="fa fa-folder-open mr-2"></i> 浏览文件
+                        </button>
+                        <button id="useDemoData" class="btn-secondary">
+                            <i class="fa fa-play-circle mr-2"></i> 使用演示数据
+                        </button>
+                    </div>
+                </div>
+                <div id="fileProcessing" class="hidden mt-6">
+                    <div class="flex items-center justify-center">
+                        <div class="loading-spinner mr-4"></div>
+                        <p class="text-lg text-gray-700">正在处理文件，请稍候...</p>
+                    </div>
+                </div>
+                <div id="fileError" class="hidden mt-6 p-4 bg-red-50 text-red-600 rounded-lg">
+                    <div class="flex items-center">
+                        <i class="fa fa-exclamation-circle text-2xl mr-3"></i>
+                        <span class="text-lg">文件格式不正确，请上传有效的CSV或Excel文件。</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 比赛区域 -->
+        <section id="raceSection" class="hidden">
+            <div class="race-container mb-8">
+                <div class="race-header mb-6">
+                    <h2 class="race-title">小鸭子游泳比赛</h2>
+                    <p class="race-subtitle">每只小鸭子代表一名学生，游动速度和距离由学生的总成绩决定</p>
+                </div>
+                
+                <!-- 比赛控制 -->
+                <div class="bg-white bg-opacity-90 rounded-xl p-6 mb-8 shadow-lg">
+                    <div class="flex flex-col md:flex-row justify-between items-center">
+                        <div class="flex items-center mb-4 md:mb-0">
+                            <div class="mr-8">
+                                <div class="text-sm text-gray-500 mb-1">班级平均分</div>
+                                <div class="text-2xl font-bold text-gray-800" id="classAverage">--</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500 mb-1">最高总分</div>
+                                <div class="text-2xl font-bold text-gray-800" id="highestScore">--</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col items-center">
+                            <div class="flex items-center mb-2">
+                                <span class="text-sm font-medium text-gray-700 mr-3">动画速度:</span>
+                                <span id="speedValue" class="text-sm font-bold text-primary">正常</span>
+                            </div>
+                            <input type="range" id="speedSlider" class="speed-slider w-48" min="1" max="5" value="3" step="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 小鸭子泳道 -->
+                <div id="duckRaceContainer" class="mb-8">
+                    <!-- 小鸭子泳道将在这里动态生成 -->
+                </div>
+                
+                <!-- 比赛控制按钮 -->
+                <div class="flex justify-center space-x-6">
+                    <button id="startAnimation" class="btn-primary">
+                        <i class="fa fa-play mr-2"></i> 开始比赛
+                    </button>
+                    <button id="resetAnimation" class="btn-secondary">
+                        <i class="fa fa-refresh mr-2"></i> 重置
+                    </button>
+                </div>
+                
+                <div class="wave"></div>
+            </div>
+        </section>
+
+        <!-- 结果区域 -->
+        <section id="resultSection" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- 左侧：前三名领奖台 -->
+                <div class="lg:col-span-1">
+                    <div class="result-card h-full flex flex-col">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-6 text-center">比赛结果</h3>
+                        
+                        <div class="podium flex-grow">
+                            <div class="podium-step mr-6">
+                                <div class="podium-medal text-yellow-500">🥈</div>
+                                <div class="podium-base w-36 h-56" id="secondPlace">
+                                    <div class="h-full flex items-center justify-center text-white font-bold text-xl" id="secondPlaceName">--</div>
+                                </div>
+                                <div class="podium-label" id="secondPlaceLabel">第二名</div>
+                                <div class="podium-score" id="secondPlaceScore">--</div>
+                            </div>
+                            <div class="podium-step mr-6">
+                                <div class="podium-medal text-yellow-600">🥇</div>
+                                <div class="podium-base w-40 h-72" id="firstPlace">
+                                    <div class="h-full flex items-center justify-center text-white font-bold text-xl" id="firstPlaceName">--</div>
+                                </div>
+                                <div class="podium-label" id="firstPlaceLabel">第一名</div>
+                                <div class="podium-score" id="firstPlaceScore">--</div>
+                            </div>
+                            <div class="podium-step">
+                                <div class="podium-medal text-amber-700">🥉</div>
+                                <div class="podium-base w-32 h-44" id="thirdPlace">
+                                    <div class="h-full flex items-center justify-center text-white font-bold text-xl" id="thirdPlaceName">--</div>
+                                </div>
+                                <div class="podium-label" id="thirdPlaceLabel">第三名</div>
+                                <div class="podium-score" id="thirdPlaceScore">--</div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex justify-center">
+                            <button id="exportResults" class="btn-success">
+                                <i class="fa fa-download mr-2"></i> 导出结果
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧：详细结果 -->
+                <div class="lg:col-span-2">
+                    <div class="result-card">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-2xl font-bold text-gray-800">详细排名</h3>
+                            <div class="flex items-center">
+                                <span class="text-sm text-gray-500 mr-2">显示:</span>
+                                <select id="showCount" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                    <option value="5">前5名</option>
+                                    <option value="10" selected>前10名</option>
+                                    <option value="all">全部</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead>
+                                    <tr>
+                                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">排名</th>
+                                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生姓名</th>
+                                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总成绩</th>
+                                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">完成时间</th>
+                                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成绩分析</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- 将在这里动态生成表格内容 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="mt-6 flex justify-center">
+                            <button id="restartRace" class="btn-primary">
+                                <i class="fa fa-refresh mr-2"></i> 重新比赛
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 帮助模态框 -->
+        <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold text-gray-800">使用帮助</h2>
+                        <button id="closeHelpModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-3">数据导入</h3>
+                            <p class="text-gray-600">系统支持CSV和Excel格式的成绩数据文件。您可以点击"浏览文件"按钮选择文件，或直接拖放文件到上传区域。</p>
+                            <p class="text-gray-600 mt-2">如果没有数据文件，可以点击"使用演示数据"按钮加载示例数据。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-3">比赛规则</h3>
+                            <p class="text-gray-600">每只小鸭子代表一名学生，所有小鸭子从同一起跑线出发。</p>
+                            <p class="text-gray-600 mt-2">小鸭子的游动速度和最终位置由学生的总成绩决定：</p>
+                            <ul class="list-disc pl-6 mt-2 text-gray-600 space-y-2">
+                                <li>总成绩越高，小鸭子游动速度越快</li>
+                                <li>总成绩越高，小鸭子最终位置越靠前</li>
+                                <li>班级平均分用红色虚线标记，便于对比</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-3">速度控制</h3>
+                            <p class="text-gray-600">您可以通过滑动速度控制条来调整小鸭子的游动速度，从慢速（5秒）到极速（1秒）不等。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-3">结果查看</h3>
+                            <p class="text-gray-600">比赛结束后，系统会显示详细的比赛结果，包括前三名领奖台和完整的排名表格。</p>
+                            <p class="text-gray-600 mt-2">您可以点击"导出结果"按钮将比赛结果导出为CSV文件。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 mb-3">数据格式要求</h3>
+                            <p class="text-gray-600">上传的成绩数据文件需要包含以下字段：</p>
+                            <ul class="list-disc pl-6 mt-2 text-gray-600 space-y-2">
+                                <li><strong>姓名</strong>：学生姓名</li>
+                                <li><strong>总分</strong>：学生所有科目的总分</li>
+                                <li><strong>排名</strong>（可选）：学生在班级中的排名</li>
+                                <li>各科目成绩（可选）：如语文、数学、英语等</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-white border-t mt-16">
+        <div class="container mx-auto px-4 py-8">
+            <div class="text-center text-gray-500">
+                <p class="text-lg">© 2025 小鸭子游泳比赛 | 学生成绩可视化</p>
+                <p class="mt-2">让学习变得更有趣！</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // 全局变量
+        let studentData = [];
+        let processedData = [];
+        let classAverage = 0;
+        let highestScore = 0;
+        let animationRunning = false;
+        let animationSpeed = 3; // 默认3秒
+        let raceResults = [];
+        let startTime = 0;
+        let showCount = 10; // 默认显示前10名
+
+        // DOM 元素
+        const fileInput = document.getElementById('fileInput');
+        const fileDropArea = document.getElementById('fileDropArea');
+        const fileProcessing = document.getElementById('fileProcessing');
+        const fileError = document.getElementById('fileError');
+        const welcomeSection = document.getElementById('welcomeSection');
+        const raceSection = document.getElementById('raceSection');
+        const resultSection = document.getElementById('resultSection');
+        const useDemoDataBtn = document.getElementById('useDemoData');
+        const browseFilesBtn = document.getElementById('browseFiles');
+        const startAnimationBtn = document.getElementById('startAnimation');
+        const resetAnimationBtn = document.getElementById('resetAnimation');
+        const restartRaceBtn = document.getElementById('restartRace');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        const showCountSelect = document.getElementById('showCount');
+        const exportResultsBtn = document.getElementById('exportResults');
+        const helpBtn = document.getElementById('helpBtn');
+        const closeHelpModalBtn = document.getElementById('closeHelpModal');
+        const helpModal = document.getElementById('helpModal');
+
+        // 初始化事件监听
+        function initEventListeners() {
+            // 文件上传相关
+            browseFilesBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            fileDropArea.addEventListener('dragover', handleDragOver);
+            fileDropArea.addEventListener('dragleave', handleDragLeave);
+            fileDropArea.addEventListener('drop', handleDrop);
+            useDemoDataBtn.addEventListener('click', loadDemoData);
+
+            // 动画控制
+            startAnimationBtn.addEventListener('click', startAnimation);
+            resetAnimationBtn.addEventListener('click', resetAnimation);
+            restartRaceBtn.addEventListener('click', restartRace);
+
+            // 速度控制
+            speedSlider.addEventListener('input', () => {
+                const speed = parseInt(speedSlider.value);
+                animationSpeed = 6 - speed; // 反转值，使滑块向右速度变快
+                
+                // 更新速度显示
+                const speedLabels = ['极慢', '慢速', '正常', '快速', '极速'];
+                speedValue.textContent = speedLabels[speed - 1];
+                
+                // 如果已经处理了数据，更新小鸭子的游泳时间
+                if (processedData.length > 0) {
+                    updateSwimTimes();
+                }
+            });
+
+            // 显示数量控制
+            showCountSelect.addEventListener('change', () => {
+                showCount = showCountSelect.value === 'all' ? processedData.length : parseInt(showCountSelect.value);
+                if (resultSection.classList.contains('hidden') === false) {
+                    updateResultTable();
+                }
+            });
+
+            // 导出结果
+            exportResultsBtn.addEventListener('click', exportResults);
+
+            // 帮助模态框
+            helpBtn.addEventListener('click', () => helpModal.classList.remove('hidden'));
+            closeHelpModalBtn.addEventListener('click', () => helpModal.classList.add('hidden'));
+        }
+
+        // 文件上传处理
+        function handleDragOver(e) {
+            e.preventDefault();
+            fileDropArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            fileDropArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            fileDropArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function processFile(file) {
+            fileError.classList.add('hidden');
+            fileProcessing.classList.remove('hidden');
+            
+            const fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.csv')) {
+                parseCSV(file);
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                parseExcel(file);
+            } else {
+                fileProcessing.classList.add('hidden');
+                fileError.classList.remove('hidden');
+            }
+        }
+
+        function parseCSV(file) {
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: results => {
+                    fileProcessing.classList.add('hidden');
+                    
+                    if (results.errors.length > 0) {
+                        fileError.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    studentData = results.data;
+                    processData();
+                },
+                error: () => {
+                    fileProcessing.classList.add('hidden');
+                    fileError.classList.remove('hidden');
+                }
+            });
+        }
+
+        function parseExcel(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = new ExcelJS.Workbook();
+                
+                workbook.xlsx.load(data).then(workbook => {
+                    const worksheet = workbook.getWorksheet(1);
+                    const jsonData = [];
+                    
+                    // 获取表头
+                    const headers = [];
+                    worksheet.getRow(1).eachCell((cell, colNumber) => {
+                        headers.push(cell.value);
+                    });
+                    
+                    // 获取数据行
+                    for (let i = 2; i <= worksheet.rowCount; i++) {
+                        const row = {};
+                        let hasData = false;
+                        
+                        worksheet.getRow(i).eachCell((cell, colNumber) => {
+                            if (cell.value !== undefined && cell.value !== null) {
+                                row[headers[colNumber - 1]] = cell.value;
+                                hasData = true;
+                            }
+                        });
+                        
+                        if (hasData) {
+                            jsonData.push(row);
+                        }
+                    }
+                    
+                    fileProcessing.classList.add('hidden');
+                    studentData = jsonData;
+                    processData();
+                }).catch(() => {
+                    fileProcessing.classList.add('hidden');
+                    fileError.classList.remove('hidden');
+                });
+            };
+            
+            reader.onerror = () => {
+                fileProcessing.classList.add('hidden');
+                fileError.classList.remove('hidden');
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 加载演示数据
+        function loadDemoData() {
+            fileProcessing.classList.remove('hidden');
+            
+            // 模拟异步加载
+            setTimeout(() => {
+                studentData = [
+                    { 姓名: '张三', 语文: 85, 数学: 92, 英语: 78, 物理: 88, 化学: 90, 生物: 82, 总分: 515, 排名: 3 },
+                    { 姓名: '李四', 语文: 90, 数学: 85, 英语: 88, 物理: 92, 化学: 86, 生物: 89, 总分: 530, 排名: 1 },
+                    { 姓名: '王五', 语文: 78, 数学: 82, 英语: 85, 物理: 76, 化学: 80, 生物: 88, 总分: 489, 排名: 8 },
+                    { 姓名: '赵六', 语文: 88, 数学: 90, 英语: 92, 物理: 85, 化学: 88, 生物: 90, 总分: 533, 排名: 1 },
+                    { 姓名: '钱七', 语文: 82, 数学: 78, 英语: 80, 物理: 88, 化学: 92, 生物: 85, 总分: 505, 排名: 5 },
+                    { 姓名: '孙八', 语文: 95, 数学: 88, 英语: 90, 物理: 92, 化学: 85, 生物: 88, 总分: 538, 排名: 1 },
+                    { 姓名: '周九', 语文: 76, 数学: 80, 英语: 78, 物理: 82, 化学: 85, 生物: 88, 总分: 489, 排名: 8 },
+                    { 姓名: '吴十', 语文: 89, 数学: 92, 英语: 85, 物理: 88, 化学: 90, 生物: 82, 总分: 526, 排名: 2 },
+                    { 姓名: '郑十一', 语文: 84, 数学: 86, 英语: 88, 物理: 90, 化学: 82, 生物: 85, 总分: 515, 排名: 3 },
+                    { 姓名: '王十二', 语文: 80, 数学: 82, 英语: 85, 物理: 90, 化学: 92, 生物: 88, 总分: 517, 排名: 3 },
+                    { 姓名: '李十三', 语文: 86, 数学: 88, 英语: 90, 物理: 82, 化学: 85, 生物: 88, 总分: 519, 排名: 3 },
+                    { 姓名: '张十四', 语文: 90, 数学: 92, 英语: 88, 物理: 85, 化学: 80, 生物: 82, 总分: 517, 排名: 3 },
+                    { 姓名: '刘十五', 语文: 82, 数学: 85, 英语: 88, 物理: 90, 化学: 92, 生物: 88, 总分: 525, 排名: 2 },
+                    { 姓名: '陈十六', 语文: 88, 数学: 85, 英语: 82, 物理: 80, 化学: 88, 生物: 90, 总分: 513, 排名: 6 },
+                    { 姓名: '杨十七', 语文: 92, 数学: 90, 英语: 88, 物理: 85, 化学: 82, 生物: 80, 总分: 517, 排名: 3 }
+                ];
+                
+                fileProcessing.classList.add('hidden');
+                processData();
+            }, 1500);
+        }
+
+        // 数据处理
+        function processData() {
+            // 检查数据格式
+            if (!validateData()) {
+                fileError.classList.remove('hidden');
+                return;
+            }
+            
+            // 计算班级平均分
+            const totalScores = studentData.reduce((sum, student) => sum + student.总分, 0);
+            classAverage = totalScores / studentData.length;
+            
+            // 找出最高分
+            highestScore = Math.max(...studentData.map(student => student.总分));
+            
+            // 处理每个学生的数据
+            processedData = studentData.map(student => {
+                // 计算游泳速度系数（分数越高，速度越快）
+                const speedFactor = student.总分 / highestScore;
+                
+                // 计算游泳时间（速度系数越高，时间越短）
+                const swimTime = animationSpeed * (1.5 - speedFactor * 0.5);
+                
+                // 计算最终位置（分数越高，位置越靠前）
+                const targetPosition = (student.总分 / highestScore) * 90; // 90%是为了留有余地
+                
+                return {
+                    ...student,
+                    游泳速度系数: speedFactor,
+                    游泳时间: swimTime,
+                    目标位置: targetPosition
+                };
+            });
+            
+            // 按总分排序
+            processedData.sort((a, b) => b.总分 - a.总分);
+            
+            // 更新UI
+            updateUI();
+        }
+
+        // 验证数据格式
+        function validateData() {
+            if (!studentData || studentData.length === 0) {
+                return false;
+            }
+            
+            // 检查是否包含必要字段
+            const firstStudent = studentData[0];
+            if (!firstStudent.姓名 || !firstStudent.总分) {
+                return false;
+            }
+            
+            return true;
+        }
+
+        // 更新游泳时间
+        function updateSwimTimes() {
+            processedData.forEach(student => {
+                // 重新计算游泳时间
+                const speedFactor = student.总分 / highestScore;
+                student.游泳时间 = animationSpeed * (1.5 - speedFactor * 0.5);
+            });
+            
+            // 如果已经创建了泳道，更新小鸭子的游泳时间
+            const ducks = document.querySelectorAll('.duck');
+            ducks.forEach((duck, index) => {
+                if (index < processedData.length) {
+                    duck.style.setProperty('--swim-duration', `${processedData[index].游泳时间}s`);
+                }
+            });
+        }
+
+        // 更新UI
+        function updateUI() {
+            // 隐藏欢迎区域，显示比赛区域
+            welcomeSection.classList.add('hidden');
+            raceSection.classList.remove('hidden');
+            
+            // 更新班级信息
+            document.getElementById('classAverage').textContent = classAverage.toFixed(1);
+            document.getElementById('highestScore').textContent = highestScore;
+            
+            // 创建小鸭子游泳比赛
+            createDuckRace();
+        }
+
+        // 创建小鸭子游泳比赛
+        function createDuckRace() {
+            const container = document.getElementById('duckRaceContainer');
+            container.innerHTML = '';
+            
+            // 添加班级平均线
+            const classAvgPosition = (classAverage / highestScore) * 90;
+            const classAvgLine = document.createElement('div');
+            classAvgLine.className = 'class-average';
+            classAvgLine.style.left = `${classAvgPosition}%`;
+            container.appendChild(classAvgLine);
+            
+            // 为每个学生创建泳道
+            processedData.forEach((student, index) => {
+                const duckContainer = document.createElement('div');
+                duckContainer.className = 'duck-container';
+                
+                const lane = document.createElement('div');
+                lane.className = 'duck-lane';
+                
+                const duck = document.createElement('img');
+                duck.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D';
+                duck.className = 'duck';
+                duck.alt = student.姓名;
+                duck.dataset.index = index;
+                
+                // 设置小鸭子的目标位置和游泳时间
+                duck.style.setProperty('--target-position', `${student.目标位置}%`);
+                duck.style.setProperty('--swim-duration', `${student.游泳时间}s`);
+                
+                // 添加点击事件
+                duck.addEventListener('click', () => showStudentDetails(student));
+                
+                // 添加悬停提示
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                
+                // 构建提示内容
+                let tooltipContent = `
+                    <div class="font-bold text-lg mb-2">${student.姓名}</div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div class="text-gray-600">总分:</div>
+                        <div class="font-semibold">${student.总分}</div>
+                `;
+                
+                // 如果有排名，显示排名
+                if (student.排名) {
+                    tooltipContent += `
+                        <div class="text-gray-600">排名:</div>
+                        <div class="font-semibold">${student.排名}</div>
+                    `;
+                }
+                
+                tooltipContent += `
+                        <div class="text-gray-600">游泳时间:</div>
+                        <div class="font-semibold">${student.游泳时间.toFixed(1)}秒</div>
+                    </div>
+                `;
+                
+                // 如果有各科成绩，显示各科成绩
+                const subjects = Object.keys(student).filter(key => 
+                    !['姓名', '总分', '排名', '游泳速度系数', '游泳时间', '目标位置', '完成时间'].includes(key)
+                );
+                
+                if (subjects.length > 0) {
+                    tooltipContent += `<div class="mt-3 pt-2 border-t border-gray-200"><div class="font-medium mb-1">各科成绩:</div><div class="grid grid-cols-2 gap-x-4 gap-y-1">`;
+                    
+                    subjects.forEach(subject => {
+                        tooltipContent += `
+                            <div class="text-gray-600">${subject}:</div>
+                            <div>${student[subject]}</div>
+                        `;
+                    });
+                    
+                    tooltipContent += `</div></div>`;
+                }
+                
+                tooltip.innerHTML = tooltipContent;
+                
+                duck.addEventListener('mouseenter', (e) => {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${Math.min(e.pageX, window.innerWidth - 320)}px`;
+                    tooltip.style.top = `${e.pageY + 20}px`;
+                    document.body.appendChild(tooltip);
+                });
+                
+                duck.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = `${Math.min(e.pageX, window.innerWidth - 320)}px`;
+                    tooltip.style.top = `${e.pageY + 20}px`;
+                });
+                
+                duck.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                    document.body.removeChild(tooltip);
+                });
+                
+                const duckName = document.createElement('div');
+                duckName.className = 'duck-name';
+                duckName.textContent = student.姓名;
+                
+                const duckScore = document.createElement('div');
+                duckScore.className = 'duck-score';
+                duckScore.textContent = student.总分;
+                
+                const duckShadow = document.createElement('div');
+                duckShadow.className = 'duck-shadow';
+                
+                lane.appendChild(duck);
+                lane.appendChild(duckShadow);
+                lane.appendChild(duckName);
+                lane.appendChild(duckScore);
+                duckContainer.appendChild(lane);
+                container.appendChild(duckContainer);
+            });
+        }
+
+        // 显示学生详情
+        function showStudentDetails(student) {
+            // 创建模态框
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            
+            // 模态框内容
+            let modalContent = `
+                <div class="bg-white rounded-lg max-w-md w-full p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-2xl font-bold">${student.姓名}</h3>
+                        <button class="close-modal text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm text-gray-500">总分</div>
+                                <div class="text-2xl font-bold">${student.总分}</div>
+                            </div>
+            `;
+            
+            // 如果有排名，显示排名
+            if (student.排名) {
+                modalContent += `
+                    <div>
+                        <div class="text-sm text-gray-500">排名</div>
+                        <div class="text-2xl font-bold">${student.排名}</div>
+                    </div>
+                `;
+            }
+            
+            modalContent += `
+                        </div>
+                        <div class="pt-4 border-t border-gray-200">
+                            <div class="text-sm text-gray-500 mb-1">与班级平均的差距</div>
+                            <div class="text-xl font-semibold ${student.总分 >= classAverage ? 'text-green-600' : 'text-red-600'}">
+                                ${student.总分 >= classAverage ? '+' : ''}${(student.总分 - classAverage).toFixed(1)}分
+                            </div>
+                        </div>
+            `;
+            
+            // 如果有各科成绩，显示各科成绩
+            const subjects = Object.keys(student).filter(key => 
+                !['姓名', '总分', '排名', '游泳速度系数', '游泳时间', '目标位置', '完成时间'].includes(key)
+            );
+            
+            if (subjects.length > 0) {
+                modalContent += `<div class="pt-4 border-t border-gray-200"><h4 class="font-medium mb-2">各科成绩</h4><div class="grid grid-cols-2 gap-2">`;
+                
+                subjects.forEach(subject => {
+                    modalContent += `
+                        <div class="flex justify-between">
+                            <span>${subject}:</span>
+                            <span class="font-medium">${student[subject]}</span>
+                        </div>
+                    `;
+                });
+                
+                modalContent += `</div></div>`;
+            }
+            
+            modalContent += `
+                    </div>
+                    <div class="mt-6 text-center">
+                        <button class="close-modal btn-secondary">关闭</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.innerHTML = modalContent;
+            document.body.appendChild(modal);
+            
+            // 添加关闭事件
+            modal.querySelector('.close-modal').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+            
+            // 点击模态框外部关闭
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    document.body.removeChild(modal);
+                }
+            });
+        }
+
+        // 开始动画
+        function startAnimation() {
+            if (animationRunning) return;
+            
+            animationRunning = true;
+            startAnimationBtn.disabled = true;
+            startAnimationBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // 重置比赛结果
+            raceResults = [];
+            startTime = Date.now();
+            
+            const ducks = document.querySelectorAll('.duck');
+            
+            ducks.forEach((duck, index) => {
+                // 重置位置
+                duck.style.transform = 'translateY(-50%) translateX(0)';
+                
+                // 延迟启动每个鸭子的动画
+                setTimeout(() => {
+                    duck.style.animation = 'none';
+                    duck.offsetHeight; // 触发重排
+                    duck.style.animation = `swim ${processedData[index].游泳时间}s ease-out forwards`;
+                    
+                    // 记录完成时间
+                    setTimeout(() => {
+                        const finishTime = (Date.now() - startTime) / 1000;
+                        raceResults.push({
+                            ...processedData[index],
+                            完成时间: finishTime
+                        });
+                        
+                        // 如果所有鸭子都完成了，显示结果
+                        if (raceResults.length === processedData.length) {
+                            showResults();
+                        }
+                    }, processedData[index].游泳时间 * 1000);
+                }, index * 100);
+            });
+            
+            // 动画结束后重新启用按钮
+            const maxSwimTime = Math.max(...processedData.map(s => s.游泳时间));
+            setTimeout(() => {
+                animationRunning = false;
+                startAnimationBtn.disabled = false;
+                startAnimationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }, ducks.length * 100 + maxSwimTime * 1000);
+        }
+
+        // 重置动画
+        function resetAnimation() {
+            const ducks = document.querySelectorAll('.duck');
+            ducks.forEach(duck => {
+                duck.style.animation = 'none';
+                duck.style.transform = 'translateY(-50%) translateX(0)';
+            });
+            
+            animationRunning = false;
+            startAnimationBtn.disabled = false;
+            startAnimationBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            // 隐藏结果区域
+            resultSection.classList.add('hidden');
+            raceSection.classList.remove('hidden');
+        }
+
+        // 重新比赛
+        function restartRace() {
+            resetAnimation();
+            setTimeout(() => {
+                startAnimation();
+            }, 500);
+        }
+
+        // 显示比赛结果
+        function showResults() {
+            // 按完成时间排序
+            raceResults.sort((a, b) => a.完成时间 - b.完成时间);
+            
+            // 创建庆祝效果
+            createConfetti();
+            
+            // 显示结果区域，隐藏比赛区域
+            raceSection.classList.add('hidden');
+            resultSection.classList.remove('hidden');
+            
+            // 更新领奖台
+            if (raceResults.length >= 1) {
+                document.getElementById('firstPlaceName').textContent = raceResults[0].姓名;
+                document.getElementById('firstPlaceScore').textContent = `${raceResults[0].总分}分 (${raceResults[0].完成时间.toFixed(2)}秒)`;
+            }
+            
+            if (raceResults.length >= 2) {
+                document.getElementById('secondPlaceName').textContent = raceResults[1].姓名;
+                document.getElementById('secondPlaceScore').textContent = `${raceResults[1].总分}分 (${raceResults[1].完成时间.toFixed(2)}秒)`;
+            }
+            
+            if (raceResults.length >= 3) {
+                document.getElementById('thirdPlaceName').textContent = raceResults[2].姓名;
+                document.getElementById('thirdPlaceScore').textContent = `${raceResults[2].总分}分 (${raceResults[2].完成时间.toFixed(2)}秒)`;
+            }
+            
+            // 更新结果表格
+            updateResultTable();
+        }
+
+        // 创建庆祝效果
+        function createConfetti() {
+            const colors = ['#f00', '#0f0', '#00f', '#ff0', '#f0f', '#0ff', '#ff5733', '#33ff57', '#3357ff'];
+            const container = document.createElement('div');
+            container.className = 'fixed inset-0 pointer-events-none z-50';
+            document.body.appendChild(container);
+            
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = `${Math.random() * 100}vw`;
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.width = `${Math.random() * 10 + 5}px`;
+                confetti.style.height = `${Math.random() * 10 + 5}px`;
+                confetti.style.animationDuration = `${Math.random() * 3 + 2}s`;
+                confetti.style.animationDelay = `${Math.random() * 2}s`;
+                container.appendChild(confetti);
+            }
+            
+            // 3秒后移除庆祝效果
+            setTimeout(() => {
+                document.body.removeChild(container);
+            }, 5000);
+        }
+
+        // 更新结果表格
+        function updateResultTable() {
+            const tableBody = document.getElementById('resultTableBody');
+            tableBody.innerHTML = '';
+            
+            // 确定要显示的学生数量
+            const studentsToShow = raceResults.slice(0, showCount);
+            
+            studentsToShow.forEach((student, index) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors';
+                
+                // 排名
+                const rankCell = document.createElement('td');
+                rankCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const rankBadge = document.createElement('div');
+                rankBadge.className = 'flex items-center justify-center w-10 h-10 rounded-full text-white font-bold';
+                
+                if (index === 0) {
+                    rankBadge.className += ' bg-yellow-600';
+                    rankBadge.textContent = '1';
+                } else if (index === 1) {
+                    rankBadge.className += ' bg-yellow-500';
+                    rankBadge.textContent = '2';
+                } else if (index === 2) {
+                    rankBadge.className += ' bg-amber-700';
+                    rankBadge.textContent = '3';
+                } else {
+                    rankBadge.className += ' bg-gray-500';
+                    rankBadge.textContent = index + 1;
+                }
+                
+                rankCell.appendChild(rankBadge);
+                row.appendChild(rankCell);
+                
+                // 学生姓名
+                const nameCell = document.createElement('td');
+                nameCell.className = 'px-6 py-4 whitespace-nowrap font-medium text-lg';
+                nameCell.textContent = student.姓名;
+                row.appendChild(nameCell);
+                
+                // 总成绩
+                const scoreCell = document.createElement('td');
+                scoreCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const scoreContainer = document.createElement('div');
+                scoreContainer.className = 'flex items-center';
+                
+                const scoreValue = document.createElement('span');
+                scoreValue.className = 'mr-3 text-lg font-semibold';
+                scoreValue.textContent = student.总分;
+                
+                const scoreBar = document.createElement('div');
+                scoreBar.className = 'progress-bar w-48';
+                
+                const scoreFill = document.createElement('div');
+                scoreFill.className = 'progress-fill bg-primary';
+                scoreFill.style.width = `${(student.总分 / highestScore) * 100}%`;
+                
+                scoreBar.appendChild(scoreFill);
+                scoreContainer.appendChild(scoreValue);
+                scoreContainer.appendChild(scoreBar);
+                scoreCell.appendChild(scoreContainer);
+                row.appendChild(scoreCell);
+                
+                // 完成时间
+                const timeCell = document.createElement('td');
+                timeCell.className = 'px-6 py-4 whitespace-nowrap';
+                timeCell.textContent = `${student.完成时间.toFixed(2)}秒`;
+                row.appendChild(timeCell);
+                
+                // 成绩分析
+                const analysisCell = document.createElement('td');
+                analysisCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const analysisText = document.createElement('div');
+                analysisText.className = 'text-sm';
+                
+                // 与班级平均分的对比
+                const avgDiff = student.总分 - classAverage;
+                if (avgDiff > 20) {
+                    analysisText.innerHTML = `<span class="text-green-600 font-medium">优秀</span>: 超过班级平均分${avgDiff.toFixed(1)}分`;
+                } else if (avgDiff > 0) {
+                    analysisText.innerHTML = `<span class="text-blue-600 font-medium">良好</span>: 超过班级平均分${avgDiff.toFixed(1)}分`;
+                } else if (avgDiff > -20) {
+                    analysisText.innerHTML = `<span class="text-yellow-600 font-medium">中等</span>: 低于班级平均分${Math.abs(avgDiff).toFixed(1)}分`;
+                } else {
+                    analysisText.innerHTML = `<span class="text-red-600 font-medium">需努力</span>: 低于班级平均分${Math.abs(avgDiff).toFixed(1)}分`;
+                }
+                
+                analysisCell.appendChild(analysisText);
+                row.appendChild(analysisCell);
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 导出结果
+        function exportResults() {
+            // 准备CSV内容
+            let csvContent = "排名,学生姓名,总成绩,完成时间,成绩分析\n";
+            
+            raceResults.forEach((student, index) => {
+                const avgDiff = student.总分 - classAverage;
+                let analysis = '';
+                
+                if (avgDiff > 20) {
+                    analysis = `优秀: 超过班级平均分${avgDiff.toFixed(1)}分`;
+                } else if (avgDiff > 0) {
+                    analysis = `良好: 超过班级平均分${avgDiff.toFixed(1)}分`;
+                } else if (avgDiff > -20) {
+                    analysis = `中等: 低于班级平均分${Math.abs(avgDiff).toFixed(1)}分`;
+                } else {
+                    analysis = `需努力: 低于班级平均分${Math.abs(avgDiff).toFixed(1)}分`;
+                }
+                
+                csvContent += `${index + 1},${student.姓名},${student.总分},${student.完成时间.toFixed(2)}秒,"${analysis}"\n`;
+            });
+            
+            // 创建下载链接
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `小鸭子游泳比赛结果_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 显示导出成功提示
+            const notification = document.createElement('div');
+            notification.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-y-10 opacity-0';
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fa fa-check-circle text-xl mr-2"></i>
+                    <span>结果导出成功！</span>
+                </div>
+            `;
+            document.body.appendChild(notification);
+            
+            // 显示通知
+            setTimeout(() => {
+                notification.classList.remove('translate-y-10', 'opacity-0');
+            }, 100);
+            
+            // 3秒后隐藏通知
+            setTimeout(() => {
+                notification.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+
+        // 初始化
+        function init() {
+            initEventListeners();
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

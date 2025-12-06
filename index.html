@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生成绩分析与可视化系统</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <!-- ExcelJS for Excel parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+    
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6', // 浅蓝色
+                        secondary: '#FBBF24', // 黄色
+                        success: '#10B981', // 绿色
+                        danger: '#EF4444', // 红色
+                        neutral: '#F3F4F6', // 浅灰色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'swim': 'swim 3s ease-out forwards',
+                    },
+                    keyframes: {
+                        swim: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(var(--target-position))' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .duck-container {
+                position: relative;
+                height: 60px;
+                margin-bottom: 10px;
+                border-radius: 8px;
+                overflow: hidden;
+            }
+            .duck-lane {
+                position: relative;
+                height: 100%;
+                background: linear-gradient(90deg, #DBEAFE 0%, #BFDBFE 100%);
+                border-radius: 8px;
+            }
+            .duck {
+                position: absolute;
+                top: 50%;
+                left: 0;
+                transform: translateY(-50%);
+                width: 50px;
+                height: 50px;
+                transition: transform 0.3s ease;
+                cursor: pointer;
+                z-index: 10;
+            }
+            .duck:hover {
+                transform: translateY(-50%) scale(1.1);
+            }
+            .duck-name {
+                position: absolute;
+                top: 50%;
+                left: 60px;
+                transform: translateY(-50%);
+                font-weight: 500;
+                z-index: 5;
+            }
+            .duck-score {
+                position: absolute;
+                top: 50%;
+                right: 10px;
+                transform: translateY(-50%);
+                font-weight: 600;
+                z-index: 5;
+            }
+            .class-average {
+                position: absolute;
+                top: 0;
+                height: 100%;
+                width: 2px;
+                background-color: rgba(239, 68, 68, 0.7);
+                z-index: 2;
+            }
+            .class-average::after {
+                content: '班级平均';
+                position: absolute;
+                top: -25px;
+                right: -50px;
+                font-size: 12px;
+                color: #EF4444;
+                white-space: nowrap;
+            }
+            .tooltip {
+                position: absolute;
+                background: white;
+                border-radius: 4px;
+                padding: 8px 12px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                z-index: 100;
+                display: none;
+                max-width: 250px;
+                font-size: 14px;
+            }
+            .tooltip::before {
+                content: '';
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                margin-left: -8px;
+                border-width: 8px;
+                border-style: solid;
+                border-color: white transparent transparent transparent;
+            }
+            .card {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .card-header {
+                font-size: 18px;
+                font-weight: 600;
+                margin-bottom: 16px;
+                color: #1F2937;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .stat-card {
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                padding: 16px;
+                text-align: center;
+            }
+            .stat-value {
+                font-size: 24px;
+                font-weight: 700;
+                color: #3B82F6;
+            }
+            .stat-label {
+                font-size: 14px;
+                color: #6B7280;
+                margin-top: 4px;
+            }
+            .tab-active {
+                color: #3B82F6;
+                border-bottom: 2px solid #3B82F6;
+            }
+            .progress-bar {
+                height: 8px;
+                background-color: #E5E7EB;
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            .progress-fill {
+                height: 100%;
+                border-radius: 4px;
+                transition: width 0.5s ease;
+            }
+            .file-drop-area {
+                border: 2px dashed #CBD5E1;
+                border-radius: 8px;
+                padding: 30px;
+                text-align: center;
+                transition: all 0.3s ease;
+            }
+            .file-drop-area:hover, .file-drop-area.dragover {
+                border-color: #3B82F6;
+                background-color: #EFF6FF;
+            }
+            .duck-animation-container {
+                position: relative;
+                overflow: hidden;
+                border-radius: 12px;
+                background: linear-gradient(180deg, #93C5FD 0%, #BFDBFE 100%);
+                padding: 20px;
+            }
+            .wave {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 20px;
+                background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg"><path fill="%233B82F6" fill-opacity="0.2" d="M0,192L48,197.3C96,203,192,213,288,229.3C384,245,480,267,576,250.7C672,235,768,181,864,181.3C960,181,1056,235,1152,234.7C1248,235,1344,181,1392,154.7L1440,128L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
+                background-size: 1440px 20px;
+                animation: wave 10s linear infinite;
+            }
+            @keyframes wave {
+                0% { background-position-x: 0; }
+                100% { background-position-x: 1440px; }
+            }
+            .duck-shadow {
+                position: absolute;
+                bottom: 5px;
+                width: 30px;
+                height: 5px;
+                background-color: rgba(0, 0, 0, 0.2);
+                border-radius: 50%;
+                left: 10px;
+                transition: width 0.3s ease, left 0.3s ease;
+            }
+            .duck:hover + .duck-shadow {
+                width: 35px;
+                left: 7.5px;
+            }
+            .loading-spinner {
+                border: 4px solid rgba(0, 0, 0, 0.1);
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                border-left-color: #3B82F6;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .skeleton {
+                background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+                background-size: 200% 100%;
+                animation: skeleton-loading 1.5s infinite;
+            }
+            @keyframes skeleton-loading {
+                0% { background-position: 200% 0; }
+                100% { background-position: -200% 0; }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between">
+            <div class="flex items-center mb-4 md:mb-0">
+                <img src="https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D" alt="小鸭子图标" class="w-10 h-10 mr-3">
+                <h1 class="text-2xl font-bold text-gray-800">学生成绩分析与可视化系统</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="helpBtn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 flex items-center transition-colors">
+                    <i class="fa fa-question-circle mr-2"></i>
+                    <span>使用帮助</span>
+                </button>
+                <button id="themeToggle" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-700 flex items-center transition-colors">
+                    <i class="fa fa-moon-o mr-2"></i>
+                    <span>切换主题</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要内容区域 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 文件上传区域 -->
+        <section id="uploadSection" class="card mb-8">
+            <div class="card-header">
+                <h2>数据导入</h2>
+                <button id="useDemoData" class="px-3 py-1 bg-primary text-white rounded-md text-sm hover:bg-blue-600 transition-colors">
+                    使用演示数据
+                </button>
+            </div>
+            <div id="fileDropArea" class="file-drop-area">
+                <i class="fa fa-cloud-upload text-4xl text-gray-400 mb-4"></i>
+                <h3 class="text-lg font-medium text-gray-700 mb-2">拖放文件到此处或点击上传</h3>
+                <p class="text-sm text-gray-500 mb-4">支持 CSV、Excel 格式的成绩数据文件</p>
+                <input type="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls">
+                <button id="browseFiles" class="px-6 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors">
+                    浏览文件
+                </button>
+            </div>
+            <div id="fileProcessing" class="hidden mt-4">
+                <div class="flex items-center justify-center">
+                    <div class="loading-spinner mr-3"></div>
+                    <p class="text-gray-700">正在处理文件，请稍候...</p>
+                </div>
+            </div>
+            <div id="fileError" class="hidden mt-4 p-3 bg-red-50 text-red-600 rounded-md">
+                <i class="fa fa-exclamation-circle mr-2"></i>
+                <span>文件格式不正确，请上传有效的CSV或Excel文件。</span>
+            </div>
+        </section>
+
+        <!-- 数据分析区域 -->
+        <section id="analysisSection" class="hidden">
+            <!-- 班级概览卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalStudents">--</div>
+                    <div class="stat-label">学生总数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avgScore">--</div>
+                    <div class="stat-label">班级平均分</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="passRate">--</div>
+                    <div class="stat-label">及格率</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="excellentRate">--</div>
+                    <div class="stat-label">优秀率</div>
+                </div>
+            </div>
+
+            <!-- 主要内容区域 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- 左侧：小鸭子游泳比赛 -->
+                <div class="lg:col-span-1">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>小鸭子游泳比赛</h2>
+                            <div class="flex space-x-2">
+                                <a href="duck-race.html" id="startAnimation" class="px-3 py-1 bg-primary text-white rounded-md text-sm hover:bg-blue-600 transition-colors inline-block">
+                                    <i class="fa fa-play mr-1"></i> 开始比赛
+                                </a>
+                                <button id="resetAnimation" class="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300 transition-colors">
+                                    <i class="fa fa-refresh mr-1"></i> 重置
+                                </button>
+                            </div>
+                        </div>
+                        <div class="duck-animation-container">
+                            <div id="duckRaceContainer" class="mb-4">
+                                <!-- 小鸭子泳道将在这里动态生成 -->
+                            </div>
+                            <div class="wave"></div>
+                        </div>
+                        <div class="mt-4 text-sm text-gray-600">
+                            <p><i class="fa fa-info-circle mr-1 text-primary"></i> 每只小鸭子代表一名学生，游动距离对应其学习能力综合指数。</p>
+                            <p class="mt-1"><i class="fa fa-hand-pointer-o mr-1 text-primary"></i> 点击小鸭子查看详细分析。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：数据分析面板 -->
+                <div class="lg:col-span-2">
+                    <!-- 标签页导航 -->
+                    <div class="bg-white rounded-t-lg shadow-sm">
+                        <div class="flex border-b">
+                            <button id="classTab" class="px-6 py-3 tab-active">班级整体分析</button>
+                            <button id="studentTab" class="px-6 py-3 text-gray-500 hover:text-gray-700">学生个体分析</button>
+                        </div>
+                    </div>
+
+                    <!-- 班级整体分析面板 -->
+                    <div id="classAnalysisPanel" class="card rounded-t-none">
+                        <!-- 班级成绩分布 -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">班级成绩分布</h3>
+                            <div class="h-64">
+                                <canvas id="scoreDistributionChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 各科成绩对比 -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">各科成绩对比</h3>
+                            <div class="h-64">
+                                <canvas id="subjectComparisonChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 重点关注学生 -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">重点关注学生</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">偏科学生</h4>
+                                    <ul id="unbalancedStudents" class="text-sm text-gray-600 space-y-1">
+                                        <!-- 将在这里动态生成 -->
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">成绩波动较大学生</h4>
+                                    <ul id="unstableStudents" class="text-sm text-gray-600 space-y-1">
+                                        <!-- 将在这里动态生成 -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 学生个体分析面板 -->
+                    <div id="studentAnalysisPanel" class="card rounded-t-none hidden">
+                        <div id="noStudentSelected" class="text-center py-8">
+                            <img src="https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D" alt="小鸭子图标" class="w-16 h-16 mx-auto mb-4 opacity-50">
+                            <p class="text-gray-500">请从左侧点击一只小鸭子查看详细分析</p>
+                        </div>
+
+                        <div id="studentDetails" class="hidden">
+                            <!-- 学生基本信息 -->
+                            <div class="mb-6">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="text-lg font-medium text-gray-800" id="studentName">--</h3>
+                                    <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium" id="studentRank">排名: --</span>
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div class="bg-gray-50 p-3 rounded-lg">
+                                        <div class="text-sm text-gray-500">总分</div>
+                                        <div class="text-lg font-semibold text-gray-800" id="studentTotalScore">--</div>
+                                    </div>
+                                    <div class="bg-gray-50 p-3 rounded-lg">
+                                        <div class="text-sm text-gray-500">平均分</div>
+                                        <div class="text-lg font-semibold text-gray-800" id="studentAvgScore">--</div>
+                                    </div>
+                                    <div class="bg-gray-50 p-3 rounded-lg">
+                                        <div class="text-sm text-gray-500">学习能力指数</div>
+                                        <div class="text-lg font-semibold text-primary" id="studentAbilityIndex">--</div>
+                                    </div>
+                                    <div class="bg-gray-50 p-3 rounded-lg">
+                                        <div class="text-sm text-gray-500">成绩稳定性</div>
+                                        <div class="text-lg font-semibold" id="studentStability">--</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 学生成绩趋势 -->
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-800 mb-4">成绩趋势</h3>
+                                <div class="h-64">
+                                    <canvas id="studentTrendChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- 学科能力雷达图 -->
+                            <div class="mb-6">
+                                <h3 class="text-lg font-medium text-gray-800 mb-4">学科能力分析</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="h-64">
+                                        <canvas id="studentRadarChart"></canvas>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-medium text-gray-700 mb-2">优势学科</h4>
+                                        <ul id="strengthSubjects" class="text-sm text-gray-600 space-y-1 mb-4">
+                                            <!-- 将在这里动态生成 -->
+                                        </ul>
+                                        <h4 class="text-sm font-medium text-gray-700 mb-2">薄弱学科</h4>
+                                        <ul id="weakSubjects" class="text-sm text-gray-600 space-y-1">
+                                            <!-- 将在这里动态生成 -->
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 学习建议 -->
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-800 mb-2">学习建议</h3>
+                                <div class="p-4 bg-blue-50 rounded-lg">
+                                    <p class="text-sm text-gray-700" id="studentAdvice">--</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据表格区域 -->
+            <div class="mt-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>学生成绩数据表</h2>
+                        <div class="flex space-x-2">
+                            <select id="tableSort" class="px-3 py-1 border border-gray-300 rounded-md text-sm">
+                                <option value="name">按姓名排序</option>
+                                <option value="totalScore">按总分排序</option>
+                                <option value="abilityIndex">按能力指数排序</option>
+                            </select>
+                            <button id="exportReport" class="px-3 py-1 bg-primary text-white rounded-md text-sm hover:bg-blue-600 transition-colors">
+                                <i class="fa fa-download mr-1"></i> 导出报告
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生姓名</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总分</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平均分</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">排名</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学习能力指数</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">成绩稳定性</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">进步趋势</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentTableBody" class="bg-white divide-y divide-gray-200">
+                                <!-- 将在这里动态生成表格内容 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 帮助模态框 -->
+        <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">使用帮助</h2>
+                        <button id="closeHelpModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">数据导入</h3>
+                            <p class="text-gray-600">系统支持CSV和Excel格式的成绩数据文件。您可以点击"浏览文件"按钮选择文件，或直接拖放文件到上传区域。</p>
+                            <p class="text-gray-600 mt-2">如果没有数据文件，可以点击"使用演示数据"按钮加载示例数据。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">小鸭子游泳比赛</h3>
+                            <p class="text-gray-600">这是系统的核心可视化功能，每只小鸭子代表一名学生，游动距离对应其学习能力综合指数。</p>
+                            <p class="text-gray-600 mt-2">点击"开始比赛"按钮启动动画，点击"重置"按钮重新开始。</p>
+                            <p class="text-gray-600 mt-2">点击任意小鸭子可查看该学生的详细分析报告。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">数据分析面板</h3>
+                            <p class="text-gray-600">系统提供班级整体分析和学生个体分析两种视图：</p>
+                            <ul class="list-disc pl-5 mt-2 text-gray-600">
+                                <li>班级整体分析：展示班级成绩分布、各科成绩对比和重点关注学生名单。</li>
+                                <li>学生个体分析：展示选定学生的成绩趋势、学科能力雷达图和个性化学习建议。</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">数据表格</h3>
+                            <p class="text-gray-600">表格展示了所有学生的成绩数据，支持按姓名、总分或学习能力指数排序。</p>
+                            <p class="text-gray-600 mt-2">点击"导出报告"按钮可生成并下载班级分析报告。</p>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-2">学习能力指数计算</h3>
+                            <p class="text-gray-600">学习能力综合指数由以下三个维度加权计算得出：</p>
+                            <ul class="list-disc pl-5 mt-2 text-gray-600">
+                                <li>成绩水平（40%）：基于学生平均分在班级中的位置</li>
+                                <li>成绩稳定性（30%）：基于历次考试成绩的波动情况</li>
+                                <li>进步趋势（30%）：基于最近两次考试的排名或总分变化</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 导出报告模态框 -->
+        <div id="reportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg max-w-2xl w-full">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">班级分析报告</h2>
+                        <button id="closeReportModal" class="text-gray-500 hover:text-gray-700">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div id="reportContent" class="bg-gray-50 p-4 rounded-lg max-h-[60vh] overflow-y-auto mb-4">
+                        <!-- 报告内容将在这里动态生成 -->
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button id="copyReport" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors">
+                            <i class="fa fa-copy mr-2"></i>复制报告
+                        </button>
+                        <button id="downloadReport" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors">
+                            <i class="fa fa-download mr-2"></i>下载报告
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-white border-t mt-12">
+        <div class="container mx-auto px-4 py-6">
+            <div class="text-center text-gray-500 text-sm">
+                <p>© 2025 学生成绩分析与可视化系统 | 专为教育工作者设计</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // 全局变量
+        let studentData = [];
+        let processedData = [];
+        let classAverage = 0;
+        let selectedStudent = null;
+        let scoreDistributionChart = null;
+        let subjectComparisonChart = null;
+        let studentTrendChart = null;
+        let studentRadarChart = null;
+        let animationRunning = false;
+
+        // DOM 元素
+        const fileInput = document.getElementById('fileInput');
+        const fileDropArea = document.getElementById('fileDropArea');
+        const fileProcessing = document.getElementById('fileProcessing');
+        const fileError = document.getElementById('fileError');
+        const uploadSection = document.getElementById('uploadSection');
+        const analysisSection = document.getElementById('analysisSection');
+        const useDemoDataBtn = document.getElementById('useDemoData');
+        const browseFilesBtn = document.getElementById('browseFiles');
+        const startAnimationBtn = document.getElementById('startAnimation');
+        const resetAnimationBtn = document.getElementById('resetAnimation');
+        const classTab = document.getElementById('classTab');
+        const studentTab = document.getElementById('studentTab');
+        const classAnalysisPanel = document.getElementById('classAnalysisPanel');
+        const studentAnalysisPanel = document.getElementById('studentAnalysisPanel');
+        const noStudentSelected = document.getElementById('noStudentSelected');
+        const studentDetails = document.getElementById('studentDetails');
+        const tableSort = document.getElementById('tableSort');
+        const exportReportBtn = document.getElementById('exportReport');
+        const helpBtn = document.getElementById('helpBtn');
+        const closeHelpModalBtn = document.getElementById('closeHelpModal');
+        const helpModal = document.getElementById('helpModal');
+        const reportModal = document.getElementById('reportModal');
+        const closeReportModalBtn = document.getElementById('closeReportModal');
+        const copyReportBtn = document.getElementById('copyReport');
+        const downloadReportBtn = document.getElementById('downloadReport');
+        const reportContent = document.getElementById('reportContent');
+        const themeToggleBtn = document.getElementById('themeToggle');
+
+        // 初始化事件监听
+        function initEventListeners() {
+            // 文件上传相关
+            browseFilesBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            fileDropArea.addEventListener('dragover', handleDragOver);
+            fileDropArea.addEventListener('dragleave', handleDragLeave);
+            fileDropArea.addEventListener('drop', handleDrop);
+            useDemoDataBtn.addEventListener('click', loadDemoData);
+
+            // 动画控制
+            // startAnimationBtn.addEventListener('click', startAnimation); // 已移除，因为现在是链接
+            resetAnimationBtn.addEventListener('click', resetAnimation);
+
+            // 标签页切换
+            classTab.addEventListener('click', () => switchTab('class'));
+            studentTab.addEventListener('click', () => switchTab('student'));
+
+            // 表格排序
+            tableSort.addEventListener('change', updateTable);
+
+            // 导出报告
+            exportReportBtn.addEventListener('click', generateReport);
+
+            // 帮助模态框
+            helpBtn.addEventListener('click', () => helpModal.classList.remove('hidden'));
+            closeHelpModalBtn.addEventListener('click', () => helpModal.classList.add('hidden'));
+
+            // 报告模态框
+            closeReportModalBtn.addEventListener('click', () => reportModal.classList.add('hidden'));
+            copyReportBtn.addEventListener('click', copyReportToClipboard);
+            downloadReportBtn.addEventListener('click', downloadReport);
+
+            // 主题切换
+            themeToggleBtn.addEventListener('click', toggleTheme);
+        }
+
+        // 文件上传处理
+        function handleDragOver(e) {
+            e.preventDefault();
+            fileDropArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            fileDropArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            fileDropArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function processFile(file) {
+            fileError.classList.add('hidden');
+            fileProcessing.classList.remove('hidden');
+            
+            const fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.csv')) {
+                parseCSV(file);
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                parseExcel(file);
+            } else {
+                fileProcessing.classList.add('hidden');
+                fileError.classList.remove('hidden');
+            }
+        }
+
+        function parseCSV(file) {
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: results => {
+                    fileProcessing.classList.add('hidden');
+                    
+                    if (results.errors.length > 0) {
+                        fileError.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    studentData = results.data;
+                    processData();
+                },
+                error: () => {
+                    fileProcessing.classList.add('hidden');
+                    fileError.classList.remove('hidden');
+                }
+            });
+        }
+
+        function parseExcel(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = new ExcelJS.Workbook();
+                
+                workbook.xlsx.load(data).then(workbook => {
+                    const worksheet = workbook.getWorksheet(1);
+                    const jsonData = [];
+                    
+                    // 获取表头
+                    const headers = [];
+                    worksheet.getRow(1).eachCell((cell, colNumber) => {
+                        headers.push(cell.value);
+                    });
+                    
+                    // 获取数据行
+                    for (let i = 2; i <= worksheet.rowCount; i++) {
+                        const row = {};
+                        let hasData = false;
+                        
+                        worksheet.getRow(i).eachCell((cell, colNumber) => {
+                            if (cell.value !== undefined && cell.value !== null) {
+                                row[headers[colNumber - 1]] = cell.value;
+                                hasData = true;
+                            }
+                        });
+                        
+                        if (hasData) {
+                            jsonData.push(row);
+                        }
+                    }
+                    
+                    fileProcessing.classList.add('hidden');
+                    studentData = jsonData;
+                    processData();
+                }).catch(() => {
+                    fileProcessing.classList.add('hidden');
+                    fileError.classList.remove('hidden');
+                });
+            };
+            
+            reader.onerror = () => {
+                fileProcessing.classList.add('hidden');
+                fileError.classList.remove('hidden');
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 加载演示数据
+        function loadDemoData() {
+            fileProcessing.classList.remove('hidden');
+            
+            // 模拟异步加载
+            setTimeout(() => {
+                studentData = [
+                    { 姓名: '张三', 语文: 85, 数学: 92, 英语: 78, 物理: 88, 化学: 90, 生物: 82, 总分: 515, 排名: 3 },
+                    { 姓名: '李四', 语文: 90, 数学: 85, 英语: 88, 物理: 92, 化学: 86, 生物: 89, 总分: 530, 排名: 1 },
+                    { 姓名: '王五', 语文: 78, 数学: 82, 英语: 85, 物理: 76, 化学: 80, 生物: 88, 总分: 489, 排名: 8 },
+                    { 姓名: '赵六', 语文: 88, 数学: 90, 英语: 92, 物理: 85, 化学: 88, 生物: 90, 总分: 533, 排名: 1 },
+                    { 姓名: '钱七', 语文: 82, 数学: 78, 英语: 80, 物理: 88, 化学: 92, 生物: 85, 总分: 505, 排名: 5 },
+                    { 姓名: '孙八', 语文: 95, 数学: 88, 英语: 90, 物理: 92, 化学: 85, 生物: 88, 总分: 538, 排名: 1 },
+                    { 姓名: '周九', 语文: 76, 数学: 80, 英语: 78, 物理: 82, 化学: 85, 生物: 88, 总分: 489, 排名: 8 },
+                    { 姓名: '吴十', 语文: 89, 数学: 92, 英语: 85, 物理: 88, 化学: 90, 生物: 82, 总分: 526, 排名: 2 },
+                    { 姓名: '郑十一', 语文: 84, 数学: 86, 英语: 88, 物理: 90, 化学: 82, 生物: 85, 总分: 515, 排名: 3 },
+                    { 姓名: '王十二', 语文: 80, 数学: 82, 英语: 85, 物理: 88, 化学: 90, 生物: 92, 总分: 517, 排名: 3 },
+                    { 姓名: '李十三', 语文: 86, 数学: 88, 英语: 90, 物理: 82, 化学: 85, 生物: 88, 总分: 519, 排名: 3 },
+                    { 姓名: '张十四', 语文: 90, 数学: 92, 英语: 88, 物理: 85, 化学: 80, 生物: 82, 总分: 517, 排名: 3 },
+                    { 姓名: '刘十五', 语文: 82, 数学: 85, 英语: 88, 物理: 90, 化学: 92, 生物: 88, 总分: 525, 排名: 2 },
+                    { 姓名: '陈十六', 语文: 88, 数学: 85, 英语: 82, 物理: 80, 化学: 88, 生物: 90, 总分: 513, 排名: 6 },
+                    { 姓名: '杨十七', 语文: 92, 数学: 90, 英语: 88, 物理: 85, 化学: 82, 生物: 80, 总分: 517, 排名: 3 }
+                ];
+                
+                // 为演示数据添加历史成绩
+                studentData.forEach(student => {
+                    // 生成随机的历史成绩，与当前成绩有一定关联但有波动
+                    student.历史成绩 = [];
+                    
+                    for (let i = 0; i < 3; i++) {
+                        const historyScore = {};
+                        const variation = Math.random() * 20 - 10; // -10 到 10 的随机波动
+                        
+                        historyScore.语文 = Math.max(60, Math.min(100, Math.round(student.语文 + variation * 0.8)));
+                        historyScore.数学 = Math.max(60, Math.min(100, Math.round(student.数学 + variation * 1.2)));
+                        historyScore.英语 = Math.max(60, Math.min(100, Math.round(student.英语 + variation * 0.9)));
+                        historyScore.物理 = Math.max(60, Math.min(100, Math.round(student.物理 + variation * 1.1)));
+                        historyScore.化学 = Math.max(60, Math.min(100, Math.round(student.化学 + variation * 0.7)));
+                        historyScore.生物 = Math.max(60, Math.min(100, Math.round(student.生物 + variation * 1.0)));
+                        historyScore.总分 = historyScore.语文 + historyScore.数学 + historyScore.英语 + 
+                                           historyScore.物理 + historyScore.化学 + historyScore.生物;
+                        
+                        student.历史成绩.push(historyScore);
+                    }
+                });
+                
+                fileProcessing.classList.add('hidden');
+                processData();
+            }, 1500);
+        }
+
+        // 数据处理
+        function processData() {
+            // 检查数据格式
+            if (!validateData()) {
+                fileError.classList.remove('hidden');
+                return;
+            }
+            
+            // 计算班级平均分
+            const totalScores = studentData.reduce((sum, student) => sum + student.总分, 0);
+            classAverage = totalScores / studentData.length;
+            
+            // 处理每个学生的数据
+            processedData = studentData.map(student => {
+                // 计算平均分
+                const subjectCount = getSubjectCount(student);
+                const avgScore = student.总分 / subjectCount;
+                
+                // 计算成绩稳定性（标准差的倒数，越高越稳定）
+                let stability = 100; // 默认值
+                if (student.历史成绩 && student.历史成绩.length > 1) {
+                    const totalScores = [student.总分, ...student.历史成绩.map(h => h.总分)];
+                    const mean = totalScores.reduce((sum, score) => sum + score, 0) / totalScores.length;
+                    const variance = totalScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / totalScores.length;
+                    const stdDev = Math.sqrt(variance);
+                    stability = Math.max(0, Math.min(100, 100 - stdDev)); // 转换为0-100的分数，分数越高越稳定
+                }
+                
+                // 计算进步趋势
+                let trend = 50; // 默认中等
+                if (student.历史成绩 && student.历史成绩.length > 0) {
+                    const lastHistoryTotal = student.历史成绩[student.历史成绩.length - 1].总分;
+                    const scoreDiff = student.总分 - lastHistoryTotal;
+                    trend = Math.max(0, Math.min(100, 50 + scoreDiff)); // 转换为0-100的分数
+                }
+                
+                // 计算学习能力综合指数
+                const scoreLevel = (avgScore / 100) * 100; // 转换为0-100的分数
+                const abilityIndex = scoreLevel * 0.4 + stability * 0.3 + trend * 0.3;
+                
+                // 识别偏科情况
+                const strengths = [];
+                const weaknesses = [];
+                const subjects = getSubjects(student);
+                
+                subjects.forEach(subject => {
+                    const classAvg = getClassAverage(subject);
+                    const diff = student[subject] - classAvg;
+                    
+                    if (diff > 10) {
+                        strengths.push({ name: subject, score: student[subject], diff: diff });
+                    } else if (diff < -10) {
+                        weaknesses.push({ name: subject, score: student[subject], diff: diff });
+                    }
+                });
+                
+                // 生成学习建议
+                let advice = generateAdvice(avgScore, stability, trend, strengths, weaknesses);
+                
+                return {
+                    ...student,
+                    平均分: avgScore,
+                    成绩稳定性: stability,
+                    进步趋势: trend,
+                    学习能力指数: abilityIndex,
+                    优势学科: strengths,
+                    薄弱学科: weaknesses,
+                    学习建议: advice
+                };
+            });
+            
+            // 按学习能力指数排序
+            processedData.sort((a, b) => b.学习能力指数 - a.学习能力指数);
+            
+            // 更新UI
+            updateUI();
+        }
+
+        // 验证数据格式
+        function validateData() {
+            if (!studentData || studentData.length === 0) {
+                return false;
+            }
+            
+            // 检查是否包含必要字段
+            const firstStudent = studentData[0];
+            if (!firstStudent.姓名 || !firstStudent.总分) {
+                return false;
+            }
+            
+            return true;
+        }
+
+        // 获取科目列表
+        function getSubjects(student) {
+            const allKeys = Object.keys(student);
+            const subjects = allKeys.filter(key => 
+                !['姓名', '总分', '排名', '平均分', '成绩稳定性', '进步趋势', '学习能力指数', '优势学科', '薄弱学科', '学习建议', '历史成绩'].includes(key)
+            );
+            return subjects;
+        }
+
+        // 获取科目数量
+        function getSubjectCount(student) {
+            return getSubjects(student).length;
+        }
+
+        // 获取班级某科目的平均分
+        function getClassAverage(subject) {
+            const total = studentData.reduce((sum, student) => sum + (student[subject] || 0), 0);
+            return total / studentData.length;
+        }
+
+        // 生成学习建议
+        function generateAdvice(avgScore, stability, trend, strengths, weaknesses) {
+            let advice = '';
+            
+            // 基于平均分的建议
+            if (avgScore >= 90) {
+                advice += '你是一名优秀的学生，继续保持当前的学习态度和方法。建议你可以尝试更有挑战性的学习内容，拓展知识面。';
+            } else if (avgScore >= 80) {
+                advice += '你是一名良好的学生，有很大的提升空间。建议你巩固基础知识，同时针对薄弱环节加强训练。';
+            } else if (avgScore >= 70) {
+                advice += '你的学习成绩中等，需要更加努力。建议你重视基础知识的学习，制定合理的学习计划并坚持执行。';
+            } else {
+                advice += '你的学习成绩有待提高，需要付出更多努力。建议你寻求老师和同学的帮助，找出学习中的问题并及时解决。';
+            }
+            
+            // 基于稳定性的建议
+            if (stability < 40) {
+                advice += ' 你的成绩波动较大，建议保持稳定的学习节奏，避免临时抱佛脚的学习方式。';
+            } else if (stability > 80) {
+                advice += ' 你的成绩非常稳定，这是一个很好的优势，继续保持。';
+            }
+            
+            // 基于趋势的建议
+            if (trend > 70) {
+                advice += ' 你最近的学习进步明显，建议总结成功经验并继续保持。';
+            } else if (trend < 30) {
+                advice += ' 你最近的学习有所退步，建议分析原因，调整学习方法和态度。';
+            }
+            
+            // 基于偏科的建议
+            if (strengths.length > 0) {
+                const strengthNames = strengths.map(s => s.name).join('、');
+                advice += ` 你的优势科目是${strengthNames}，可以充分利用这些优势，帮助其他同学共同进步。`;
+            }
+            
+            if (weaknesses.length > 0) {
+                const weaknessNames = weaknesses.map(w => w.name).join('、');
+                advice += ` 你的薄弱科目是${weaknessNames}，建议在这些科目上多花时间，可以寻求老师的额外指导或参加辅导班。`;
+            }
+            
+            return advice;
+        }
+
+        // 更新UI
+        function updateUI() {
+            // 显示分析区域，隐藏上传区域
+            uploadSection.classList.add('hidden');
+            analysisSection.classList.remove('hidden');
+            
+            // 更新班级概览
+            updateClassOverview();
+            
+            // 创建小鸭子游泳比赛
+            createDuckRace();
+            
+            // 更新班级分析图表
+            updateClassCharts();
+            
+            // 更新学生表格
+            updateTable();
+            
+            // 更新重点关注学生列表
+            updateFocusStudents();
+        }
+
+        // 更新班级概览
+        function updateClassOverview() {
+            document.getElementById('totalStudents').textContent = studentData.length;
+            document.getElementById('avgScore').textContent = classAverage.toFixed(1);
+            
+            // 计算及格率（假设60分为及格线）
+            const passCount = studentData.filter(student => {
+                const subjects = getSubjects(student);
+                const passSubjects = subjects.filter(subject => student[subject] >= 60);
+                return passSubjects.length === subjects.length;
+            }).length;
+            const passRate = (passCount / studentData.length) * 100;
+            document.getElementById('passRate').textContent = passRate.toFixed(1) + '%';
+            
+            // 计算优秀率（假设85分为优秀线）
+            const excellentCount = studentData.filter(student => {
+                const avgScore = student.总分 / getSubjectCount(student);
+                return avgScore >= 85;
+            }).length;
+            const excellentRate = (excellentCount / studentData.length) * 100;
+            document.getElementById('excellentRate').textContent = excellentRate.toFixed(1) + '%';
+        }
+
+        // 创建小鸭子游泳比赛
+        function createDuckRace() {
+            const container = document.getElementById('duckRaceContainer');
+            container.innerHTML = '';
+            
+            // 添加班级平均线
+            const classAvgPosition = (classAverage / 600) * 100; // 假设满分600
+            const classAvgLine = document.createElement('div');
+            classAvgLine.className = 'class-average';
+            classAvgLine.style.left = `${classAvgPosition}%`;
+            container.appendChild(classAvgLine);
+            
+            // 为每个学生创建泳道
+            processedData.forEach((student, index) => {
+                const duckContainer = document.createElement('div');
+                duckContainer.className = 'duck-container';
+                
+                const lane = document.createElement('div');
+                lane.className = 'duck-lane';
+                
+                const duck = document.createElement('img');
+                duck.src = 'https://p3-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/16305ef265754a1997731d018d312bdd~tplv-a9rns2rl98-image.image?rcl=2025120609460582BAB335492E41DF8B77&rk3s=8e244e95&rrcfp=f06b921b&x-expires=1767577590&x-signature=YFhZqTFZdyyaN%2Fmc3aljIHtSWNw%3D';
+                duck.className = 'duck';
+                duck.alt = student.姓名;
+                duck.dataset.index = index;
+                
+                // 设置小鸭子的目标位置
+                const targetPosition = (student.学习能力指数 / 100) * 90; // 90%是为了留有余地
+                duck.style.setProperty('--target-position', `${targetPosition}%`);
+                
+                // 添加点击事件
+                duck.addEventListener('click', () => selectStudent(index));
+                
+                // 添加悬停提示
+                const tooltip = document.createElement('div');
+                tooltip.className = 'tooltip';
+                tooltip.innerHTML = `
+                    <div class="font-medium">${student.姓名}</div>
+                    <div class="mt-1">学习能力指数: ${student.学习能力指数.toFixed(1)}</div>
+                    <div>总分: ${student.总分}</div>
+                    <div>排名: ${student.排名}</div>
+                `;
+                
+                duck.addEventListener('mouseenter', (e) => {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${e.pageX}px`;
+                    tooltip.style.top = `${e.pageY + 20}px`;
+                    document.body.appendChild(tooltip);
+                });
+                
+                duck.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = `${e.pageX}px`;
+                    tooltip.style.top = `${e.pageY + 20}px`;
+                });
+                
+                duck.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                    document.body.removeChild(tooltip);
+                });
+                
+                const duckName = document.createElement('div');
+                duckName.className = 'duck-name';
+                duckName.textContent = student.姓名;
+                
+                const duckScore = document.createElement('div');
+                duckScore.className = 'duck-score';
+                duckScore.textContent = student.学习能力指数.toFixed(1);
+                
+                const duckShadow = document.createElement('div');
+                duckShadow.className = 'duck-shadow';
+                
+                lane.appendChild(duck);
+                lane.appendChild(duckShadow);
+                lane.appendChild(duckName);
+                lane.appendChild(duckScore);
+                duckContainer.appendChild(lane);
+                container.appendChild(duckContainer);
+            });
+        }
+
+        // 开始动画函数已移除，因为现在开始比赛按钮是链接跳转到duck-race.html
+
+        // 重置动画
+        function resetAnimation() {
+            const ducks = document.querySelectorAll('.duck');
+            ducks.forEach(duck => {
+                duck.style.animation = 'none';
+                duck.style.transform = 'translateY(-50%) translateX(0)';
+            });
+            
+            animationRunning = false;
+            startAnimationBtn.disabled = false;
+        }
+
+        // 切换标签页
+        function switchTab(tab) {
+            if (tab === 'class') {
+                classTab.classList.add('tab-active');
+                studentTab.classList.remove('tab-active');
+                classAnalysisPanel.classList.remove('hidden');
+                studentAnalysisPanel.classList.add('hidden');
+            } else {
+                studentTab.classList.add('tab-active');
+                classTab.classList.remove('tab-active');
+                studentAnalysisPanel.classList.remove('hidden');
+                classAnalysisPanel.classList.add('hidden');
+                
+                // 如果没有选择学生，显示提示
+                if (!selectedStudent) {
+                    noStudentSelected.classList.remove('hidden');
+                    studentDetails.classList.add('hidden');
+                }
+            }
+        }
+
+        // 选择学生
+        function selectStudent(index) {
+            selectedStudent = processedData[index];
+            
+            // 切换到学生分析标签页
+            switchTab('student');
+            
+            // 显示学生详情
+            noStudentSelected.classList.add('hidden');
+            studentDetails.classList.remove('hidden');
+            
+            // 更新学生信息
+            updateStudentDetails();
+        }
+
+        // 更新学生详情
+        function updateStudentDetails() {
+            if (!selectedStudent) return;
+            
+            // 基本信息
+            document.getElementById('studentName').textContent = selectedStudent.姓名;
+            document.getElementById('studentRank').textContent = `排名: ${selectedStudent.排名}`;
+            document.getElementById('studentTotalScore').textContent = selectedStudent.总分;
+            document.getElementById('studentAvgScore').textContent = selectedStudent.平均分.toFixed(1);
+            document.getElementById('studentAbilityIndex').textContent = selectedStudent.学习能力指数.toFixed(1);
+            
+            // 成绩稳定性
+            const stabilityElement = document.getElementById('studentStability');
+            const stabilityValue = selectedStudent.成绩稳定性;
+            stabilityElement.textContent = stabilityValue.toFixed(1);
+            
+            if (stabilityValue >= 80) {
+                stabilityElement.className = 'text-lg font-semibold text-green-600';
+            } else if (stabilityValue >= 60) {
+                stabilityElement.className = 'text-lg font-semibold text-blue-600';
+            } else {
+                stabilityElement.className = 'text-lg font-semibold text-red-600';
+            }
+            
+            // 学习建议
+            document.getElementById('studentAdvice').textContent = selectedStudent.学习建议;
+            
+            // 更新成绩趋势图
+            updateStudentTrendChart();
+            
+            // 更新学科能力雷达图
+            updateStudentRadarChart();
+            
+            // 更新优势和薄弱学科列表
+            updateSubjectLists();
+        }
+
+        // 更新学生成绩趋势图
+        function updateStudentTrendChart() {
+            const ctx = document.getElementById('studentTrendChart').getContext('2d');
+            
+            // 销毁旧图表
+            if (studentTrendChart) {
+                studentTrendChart.destroy();
+            }
+            
+            // 准备数据
+            const labels = ['考试1', '考试2', '考试3', '当前'];
+            const scores = [];
+            
+            // 添加历史成绩
+            if (selectedStudent.历史成绩) {
+                selectedStudent.历史成绩.forEach(history => {
+                    scores.push(history.总分);
+                });
+            }
+            
+            // 添加当前成绩
+            scores.push(selectedStudent.总分);
+            
+            // 创建图表
+            studentTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels.slice(0, scores.length),
+                    datasets: [{
+                        label: '总分',
+                        data: scores,
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            min: Math.max(0, Math.min(...scores) - 50),
+                            max: Math.min(600, Math.max(...scores) + 50)
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新学生学科能力雷达图
+        function updateStudentRadarChart() {
+            const ctx = document.getElementById('studentRadarChart').getContext('2d');
+            
+            // 销毁旧图表
+            if (studentRadarChart) {
+                studentRadarChart.destroy();
+            }
+            
+            // 准备数据
+            const subjects = getSubjects(selectedStudent);
+            const studentScores = subjects.map(subject => selectedStudent[subject]);
+            const classAvgScores = subjects.map(subject => getClassAverage(subject));
+            
+            // 创建图表
+            studentRadarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: subjects,
+                    datasets: [
+                        {
+                            label: '学生成绩',
+                            data: studentScores,
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            borderColor: '#3B82F6',
+                            pointBackgroundColor: '#3B82F6',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: '#3B82F6'
+                        },
+                        {
+                            label: '班级平均',
+                            data: classAvgScores,
+                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            borderColor: '#EF4444',
+                            pointBackgroundColor: '#EF4444',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: '#EF4444'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: {
+                                display: true
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新优势和薄弱学科列表
+        function updateSubjectLists() {
+            const strengthList = document.getElementById('strengthSubjects');
+            const weakList = document.getElementById('weakSubjects');
+            
+            strengthList.innerHTML = '';
+            weakList.innerHTML = '';
+            
+            // 添加优势学科
+            if (selectedStudent.优势学科 && selectedStudent.优势学科.length > 0) {
+                selectedStudent.优势学科.forEach(subject => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<i class="fa fa-arrow-up text-green-500 mr-1"></i> ${subject.name}: ${subject.score}分 (高于班级平均${subject.diff.toFixed(1)}分)`;
+                    strengthList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = '暂无明显优势学科';
+                li.className = 'text-gray-400';
+                strengthList.appendChild(li);
+            }
+            
+            // 添加薄弱学科
+            if (selectedStudent.薄弱学科 && selectedStudent.薄弱学科.length > 0) {
+                selectedStudent.薄弱学科.forEach(subject => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<i class="fa fa-arrow-down text-red-500 mr-1"></i> ${subject.name}: ${subject.score}分 (低于班级平均${Math.abs(subject.diff).toFixed(1)}分)`;
+                    weakList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = '暂无明显薄弱学科';
+                li.className = 'text-gray-400';
+                weakList.appendChild(li);
+            }
+        }
+
+        // 更新班级分析图表
+        function updateClassCharts() {
+            // 更新成绩分布直方图
+            updateScoreDistributionChart();
+            
+            // 更新各科成绩对比柱状图
+            updateSubjectComparisonChart();
+        }
+
+        // 更新成绩分布直方图
+        function updateScoreDistributionChart() {
+            const ctx = document.getElementById('scoreDistributionChart').getContext('2d');
+            
+            // 销毁旧图表
+            if (scoreDistributionChart) {
+                scoreDistributionChart.destroy();
+            }
+            
+            // 准备数据
+            const scores = studentData.map(student => student.总分);
+            const minScore = Math.min(...scores);
+            const maxScore = Math.max(...scores);
+            const binSize = 30;
+            const binCount = Math.ceil((maxScore - minScore) / binSize);
+            
+            const bins = new Array(binCount).fill(0);
+            const labels = [];
+            
+            for (let i = 0; i < binCount; i++) {
+                const binStart = minScore + i * binSize;
+                const binEnd = binStart + binSize;
+                labels.push(`${binStart}-${binEnd}`);
+                
+                scores.forEach(score => {
+                    if (score >= binStart && score < binEnd) {
+                        bins[i]++;
+                    }
+                });
+            }
+            
+            // 创建图表
+            scoreDistributionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '学生数量',
+                        data: bins,
+                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '学生数量'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '总分范围'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新各科成绩对比柱状图
+        function updateSubjectComparisonChart() {
+            const ctx = document.getElementById('subjectComparisonChart').getContext('2d');
+            
+            // 销毁旧图表
+            if (subjectComparisonChart) {
+                subjectComparisonChart.destroy();
+            }
+            
+            // 准备数据
+            const subjects = getSubjects(studentData[0]);
+            const avgScores = subjects.map(subject => getClassAverage(subject));
+            
+            // 创建图表
+            subjectComparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: subjects,
+                    datasets: [{
+                        label: '平均分',
+                        data: avgScores,
+                        backgroundColor: 'rgba(251, 191, 36, 0.6)',
+                        borderColor: 'rgba(251, 191, 36, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: '平均分'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新学生表格
+        function updateTable() {
+            const tableBody = document.getElementById('studentTableBody');
+            tableBody.innerHTML = '';
+            
+            // 获取排序方式
+            const sortBy = tableSort.value;
+            
+            // 排序数据
+            let sortedData = [...processedData];
+            if (sortBy === 'name') {
+                sortedData.sort((a, b) => a.姓名.localeCompare(b.姓名));
+            } else if (sortBy === 'totalScore') {
+                sortedData.sort((a, b) => b.总分 - a.总分);
+            } else if (sortBy === 'abilityIndex') {
+                sortedData.sort((a, b) => b.学习能力指数 - a.学习能力指数);
+            }
+            
+            // 生成表格行
+            sortedData.forEach(student => {
+                const row = document.createElement('tr');
+                
+                // 学生姓名
+                const nameCell = document.createElement('td');
+                nameCell.className = 'px-6 py-4 whitespace-nowrap';
+                nameCell.textContent = student.姓名;
+                row.appendChild(nameCell);
+                
+                // 总分
+                const totalScoreCell = document.createElement('td');
+                totalScoreCell.className = 'px-6 py-4 whitespace-nowrap';
+                totalScoreCell.textContent = student.总分;
+                row.appendChild(totalScoreCell);
+                
+                // 平均分
+                const avgScoreCell = document.createElement('td');
+                avgScoreCell.className = 'px-6 py-4 whitespace-nowrap';
+                avgScoreCell.textContent = student.平均分.toFixed(1);
+                row.appendChild(avgScoreCell);
+                
+                // 排名
+                const rankCell = document.createElement('td');
+                rankCell.className = 'px-6 py-4 whitespace-nowrap';
+                rankCell.textContent = student.排名;
+                row.appendChild(rankCell);
+                
+                // 学习能力指数
+                const abilityCell = document.createElement('td');
+                abilityCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const abilityContainer = document.createElement('div');
+                abilityContainer.className = 'flex items-center';
+                
+                const abilityValue = document.createElement('span');
+                abilityValue.className = 'mr-2';
+                abilityValue.textContent = student.学习能力指数.toFixed(1);
+                
+                const abilityBar = document.createElement('div');
+                abilityBar.className = 'progress-bar flex-1';
+                
+                const abilityFill = document.createElement('div');
+                abilityFill.className = 'progress-fill bg-primary';
+                abilityFill.style.width = `${student.学习能力指数}%`;
+                
+                abilityBar.appendChild(abilityFill);
+                abilityContainer.appendChild(abilityValue);
+                abilityContainer.appendChild(abilityBar);
+                abilityCell.appendChild(abilityContainer);
+                row.appendChild(abilityCell);
+                
+                // 成绩稳定性
+                const stabilityCell = document.createElement('td');
+                stabilityCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const stabilityContainer = document.createElement('div');
+                stabilityContainer.className = 'flex items-center';
+                
+                const stabilityValue = document.createElement('span');
+                stabilityValue.className = 'mr-2';
+                stabilityValue.textContent = student.成绩稳定性.toFixed(1);
+                
+                const stabilityBar = document.createElement('div');
+                stabilityBar.className = 'progress-bar flex-1';
+                
+                const stabilityFill = document.createElement('div');
+                stabilityFill.className = 'progress-fill';
+                
+                // 根据稳定性值设置颜色
+                if (student.成绩稳定性 >= 80) {
+                    stabilityFill.className += ' bg-green-500';
+                } else if (student.成绩稳定性 >= 60) {
+                    stabilityFill.className += ' bg-blue-500';
+                } else {
+                    stabilityFill.className += ' bg-red-500';
+                }
+                
+                stabilityFill.style.width = `${student.成绩稳定性}%`;
+                
+                stabilityBar.appendChild(stabilityFill);
+                stabilityContainer.appendChild(stabilityValue);
+                stabilityContainer.appendChild(stabilityBar);
+                stabilityCell.appendChild(stabilityContainer);
+                row.appendChild(stabilityCell);
+                
+                // 进步趋势
+                const trendCell = document.createElement('td');
+                trendCell.className = 'px-6 py-4 whitespace-nowrap';
+                
+                const trendContainer = document.createElement('div');
+                trendContainer.className = 'flex items-center';
+                
+                const trendValue = document.createElement('span');
+                trendValue.className = 'mr-2';
+                trendValue.textContent = student.进步趋势.toFixed(1);
+                
+                const trendBar = document.createElement('div');
+                trendBar.className = 'progress-bar flex-1';
+                
+                const trendFill = document.createElement('div');
+                trendFill.className = 'progress-fill';
+                
+                // 根据趋势值设置颜色
+                if (student.进步趋势 >= 70) {
+                    trendFill.className += ' bg-green-500';
+                } else if (student.进步趋势 >= 40) {
+                    trendFill.className += ' bg-blue-500';
+                } else {
+                    trendFill.className += ' bg-red-500';
+                }
+                
+                trendFill.style.width = `${student.进步趋势}%`;
+                
+                trendBar.appendChild(trendFill);
+                trendContainer.appendChild(trendValue);
+                trendContainer.appendChild(trendBar);
+                trendCell.appendChild(trendContainer);
+                row.appendChild(trendCell);
+                
+                // 添加点击事件
+                row.addEventListener('click', () => {
+                    const index = processedData.findIndex(s => s.姓名 === student.姓名);
+                    selectStudent(index);
+                });
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        // 更新重点关注学生列表
+        function updateFocusStudents() {
+            // 更新偏科学生列表
+            const unbalancedList = document.getElementById('unbalancedStudents');
+            unbalancedList.innerHTML = '';
+            
+            // 找出偏科学生（至少有一门科目高于班级平均15分，同时至少有一门科目低于班级平均15分）
+            const unbalancedStudents = processedData.filter(student => {
+                const hasStrength = student.优势学科 && student.优势学科.some(s => s.diff > 15);
+                const hasWeakness = student.薄弱学科 && student.薄弱学科.some(w => Math.abs(w.diff) > 15);
+                return hasStrength && hasWeakness;
+            });
+            
+            if (unbalancedStudents.length > 0) {
+                unbalancedStudents.slice(0, 5).forEach(student => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<i class="fa fa-exclamation-triangle text-yellow-500 mr-1"></i> ${student.姓名}`;
+                    unbalancedList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = '暂无明显偏科学生';
+                li.className = 'text-gray-400';
+                unbalancedList.appendChild(li);
+            }
+            
+            // 更新成绩波动较大学生列表
+            const unstableList = document.getElementById('unstableStudents');
+            unstableList.innerHTML = '';
+            
+            // 找出成绩波动较大的学生（稳定性低于40）
+            const unstableStudents = processedData.filter(student => student.成绩稳定性 < 40);
+            
+            if (unstableStudents.length > 0) {
+                unstableStudents.slice(0, 5).forEach(student => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<i class="fa fa-area-chart text-red-500 mr-1"></i> ${student.姓名} (稳定性: ${student.成绩稳定性.toFixed(1)})`;
+                    unstableList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = '暂无成绩波动较大学生';
+                li.className = 'text-gray-400';
+                unstableList.appendChild(li);
+            }
+        }
+
+        // 生成分析报告
+        function generateReport() {
+            // 计算班级整体情况
+            const totalStudents = studentData.length;
+            const avgScore = classAverage.toFixed(1);
+            
+            // 计算各科平均分
+            const subjects = getSubjects(studentData[0]);
+            const subjectAverages = subjects.map(subject => {
+                return {
+                    name: subject,
+                    avg: getClassAverage(subject).toFixed(1)
+                };
+            });
+            
+            // 找出最高分和最低分学生
+            const sortedByTotal = [...studentData].sort((a, b) => b.总分 - a.总分);
+            const highestScoreStudent = sortedByTotal[0];
+            const lowestScoreStudent = sortedByTotal[sortedByTotal.length - 1];
+            
+            // 找出偏科学生
+            const unbalancedStudents = processedData.filter(student => {
+                const hasStrength = student.优势学科 && student.优势学科.some(s => s.diff > 15);
+                const hasWeakness = student.薄弱学科 && student.薄弱学科.some(w => Math.abs(w.diff) > 15);
+                return hasStrength && hasWeakness;
+            });
+            
+            // 找出成绩波动较大学生
+            const unstableStudents = processedData.filter(student => student.成绩稳定性 < 40);
+            
+            // 找出进步明显学生
+            const improvingStudents = processedData.filter(student => student.进步趋势 > 80);
+            
+            // 生成报告内容
+            let reportHTML = `
+                <h2 class="text-xl font-bold mb-4">班级成绩分析报告</h2>
+                <p class="mb-2"><strong>报告生成时间：</strong>${new Date().toLocaleString()}</p>
+                <p class="mb-2"><strong>班级人数：</strong>${totalStudents}人</p>
+                <hr class="my-4">
+                
+                <h3 class="text-lg font-bold mb-2">一、班级整体情况</h3>
+                <p class="mb-2">班级总平均分为：<strong>${avgScore}</strong>分</p>
+                
+                <h4 class="font-bold mt-3 mb-1">各科平均分：</h4>
+                <ul class="list-disc pl-5 mb-3">
+                    ${subjectAverages.map(s => `<li>${s.name}：${s.avg}分</li>`).join('')}
+                </ul>
+                
+                <h4 class="font-bold mt-3 mb-1">最高分与最低分：</h4>
+                <p class="mb-1">最高分：${highestScoreStudent.姓名}，${highestScoreStudent.总分}分</p>
+                <p class="mb-3">最低分：${lowestScoreStudent.姓名}，${lowestScoreStudent.总分}分</p>
+                
+                <h3 class="text-lg font-bold mb-2 mt-4">二、重点关注学生</h3>
+                
+                <h4 class="font-bold mt-3 mb-1">偏科学生（共${unbalancedStudents.length}人）：</h4>
+                ${unbalancedStudents.length > 0 ? 
+                    `<ul class="list-disc pl-5 mb-3">
+                        ${unbalancedStudents.map(s => `<li>${s.姓名}：优势科目${s.优势学科.map(sub => sub.name).join('、')}；薄弱科目${s.薄弱学科.map(sub => sub.name).join('、')}</li>`).join('')}
+                    </ul>` : 
+                    `<p class="mb-3">暂无明显偏科学生</p>`
+                }
+                
+                <h4 class="font-bold mt-3 mb-1">成绩波动较大学生（共${unstableStudents.length}人）：</h4>
+                ${unstableStudents.length > 0 ? 
+                    `<ul class="list-disc pl-5 mb-3">
+                        ${unstableStudents.map(s => `<li>${s.姓名}：稳定性指数${s.成绩稳定性.toFixed(1)}</li>`).join('')}
+                    </ul>` : 
+                    `<p class="mb-3">暂无成绩波动较大学生</p>`
+                }
+                
+                <h4 class="font-bold mt-3 mb-1">进步明显学生（共${improvingStudents.length}人）：</h4>
+                ${improvingStudents.length > 0 ? 
+                    `<ul class="list-disc pl-5 mb-3">
+                        ${improvingStudents.map(s => `<li>${s.姓名}：进步指数${s.进步趋势.toFixed(1)}</li>`).join('')}
+                    </ul>` : 
+                    `<p class="mb-3">暂无进步明显学生</p>`
+                }
+                
+                <h3 class="text-lg font-bold mb-2 mt-4">三、学习能力排名</h3>
+                <p class="mb-2">以下是基于学习能力综合指数的学生排名（前10名）：</p>
+                <ol class="list-decimal pl-5 mb-3">
+                    ${processedData.slice(0, 10).map(s => `<li>${s.姓名}：${s.学习能力指数.toFixed(1)}分</li>`).join('')}
+                </ol>
+                
+                <h3 class="text-lg font-bold mb-2 mt-4">四、教学建议</h3>
+                <ul class="list-disc pl-5 mb-3">
+                    <li>针对班级整体情况，建议加强${subjectAverages.sort((a, b) => a.avg - b.avg)[0].name}科目的教学</li>
+                    ${unbalancedStudents.length > 0 ? `<li>对于偏科学生，建议开展针对性的辅导，帮助他们平衡各科成绩</li>` : ''}
+                    ${unstableStudents.length > 0 ? `<li>对于成绩波动较大的学生，建议与家长沟通，了解学生的学习状态和生活情况</li>` : ''}
+                    <li>建议定期组织学习方法分享会，让成绩优秀的学生分享学习经验</li>
+                    <li>建议关注学生的学习态度和学习习惯，这对成绩的提高至关重要</li>
+                </ul>
+            `;
+            
+            // 显示报告模态框
+            reportContent.innerHTML = reportHTML;
+            reportModal.classList.remove('hidden');
+        }
+
+        // 复制报告到剪贴板
+        function copyReportToClipboard() {
+            const reportText = reportContent.innerText;
+            
+            navigator.clipboard.writeText(reportText).then(() => {
+                // 显示复制成功提示
+                const originalText = copyReportBtn.innerHTML;
+                copyReportBtn.innerHTML = '<i class="fa fa-check mr-2"></i>已复制';
+                copyReportBtn.classList.add('bg-green-100', 'text-green-700');
+                
+                setTimeout(() => {
+                    copyReportBtn.innerHTML = originalText;
+                    copyReportBtn.classList.remove('bg-green-100', 'text-green-700');
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+            });
+        }
+
+        // 下载报告
+        function downloadReport() {
+            const reportText = reportContent.innerText;
+            const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `班级成绩分析报告_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        }
+
+        // 切换主题
+        function toggleTheme() {
+            const body = document.body;
+            const isDarkMode = body.classList.contains('dark');
+            
+            if (isDarkMode) {
+                body.classList.remove('dark');
+                themeToggleBtn.innerHTML = '<i class="fa fa-moon-o mr-2"></i>切换主题';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.add('dark');
+                themeToggleBtn.innerHTML = '<i class="fa fa-sun-o mr-2"></i>切换主题';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // 初始化
+        function init() {
+            initEventListeners();
+            
+            // 检查本地存储中的主题设置
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark');
+                themeToggleBtn.innerHTML = '<i class="fa fa-sun-o mr-2"></i>切换主题';
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
