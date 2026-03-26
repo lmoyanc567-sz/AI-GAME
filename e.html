@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>幼教专业成长评测-探险地图版</title>
+    <style>
+        :root {
+            --bg: #F7F3E9;
+            --primary: #FF8C69;
+            --secondary: #4ECDC4;
+            --text: #4A4A4A;
+            --white: #FFFFFF;
+            --grey: #D1D5DB;
+            --card-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+            --radius: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0.6); }
+            70% { box-shadow: 0 0 0 15px rgba(78, 205, 196, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(78, 205, 196, 0); }
+        }
+
+        /* --- 全局星星荣誉栏 --- */
+        .global-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 15px 10px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title {
+            font-weight: 900;
+            color: #8B4513;
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
+
+        .star-container {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .star {
+            font-size: 22px;
+            color: var(--grey);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .star.lit {
+            color: #FFD700;
+            transform: scale(1.25);
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+        }
+
+        /* --- 首页：大地图视图 --- */
+        #map-screen {
+            padding: 20px;
+            padding-bottom: 80px;
+            max-width: 500px;
+            margin: 0 auto;
+            width: 100%;
+            animation: popIn 0.5s;
+        }
+
+        .map-intro {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .map-intro h2 {
+            color: var(--primary);
+            margin: 0;
+            font-size: 26px;
+            font-weight: 900;
+        }
+
+        /* 无缝 SVG 矢量河流 */
+        .river-container {
+            position: relative;
+            width: 100%;
+            height: 480px; /* 增加了高度以容纳下方的星星 */
+            margin: 0 auto;
+            max-width: 380px;
+        }
+
+        .river-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .line-seg {
+            fill: none;
+            stroke: var(--grey);
+            stroke-width: 14px;
+            stroke-linecap: round;
+            stroke-dasharray: 14 24;
+            transition: stroke 0.6s, stroke-dasharray 0.6s;
+        }
+
+        .line-seg.lit {
+            stroke: var(--secondary);
+            stroke-dasharray: none;
+            filter: drop-shadow(0 0 6px rgba(78, 205, 196, 0.5));
+        }
+
+        /* 关卡节点（从下至上倒序坐标） */
+        .node-wrapper {
+            position: absolute;
+            width: 120px; /* 增加宽度避免文字换行 */
+            text-align: center;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        /* 3-2-1-0 坐标映射，从上往下排布 DOM，视觉从下往上攀登 */
+        .node-3 { top: 10%; left: 50%; }
+        .node-2 { top: 35%; left: 20%; }
+        .node-1 { top: 65%; left: 80%; }
+        .node-0 { top: 90%; left: 50%; }
+
+        .node {
+            width: 75px;
+            height: 75px;
+            background: var(--white);
+            border: 4px solid var(--grey);
+            border-radius: 50%;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--card-shadow);
+            cursor: pointer;
+            transition: 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .node .img-placeholder {
+            width: 100%;
+            height: 100%;
+            background: #F8F9FA;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+        }
+
+        .node-title {
+            font-size: 14px;
+            font-weight: 900;
+            color: #555;
+            margin-top: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border-radius: 12px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            display: inline-block;
+        }
+
+        /* 新增：节点下方的星星展示区 */
+        .node-stars {
+            margin-top: 6px;
+            font-size: 14px;
+            letter-spacing: 2px;
+        }
+
+        .node-wrapper.locked .node { filter: grayscale(100%); opacity: 0.8; cursor: not-allowed; }
+        .node-wrapper.locked .node::after { content: '🔒'; position: absolute; font-size: 28px; z-index: 5; }
+        
+        .node-wrapper.active .node { border-color: var(--secondary); animation: pulse 2s infinite; }
+        .node-wrapper.active .node-title { color: var(--secondary); }
+        
+        .node-wrapper.completed .node { border-color: var(--primary); }
+        .node-wrapper.completed .node::after {
+            content: '✅'; position: absolute; font-size: 28px; background: rgba(255, 255, 255, 0.7);
+            width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; z-index: 5;
+        }
+
+        /* 终极奖杯 */
+        .trophy-container { text-align: center; margin-top: 10px; position: relative; z-index: 10; padding: 20px; background: white; border-radius: 20px; box-shadow: var(--card-shadow); }
+        .trophy-icon { font-size: 80px; filter: grayscale(100%); opacity: 0.4; transition: 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .trophy-container.lit .trophy-icon { filter: grayscale(0%); opacity: 1; transform: scale(1.15); text-shadow: 0 0 30px rgba(255, 217, 61, 0.8); }
+        .trophy-text { font-weight: 800; color: #999; margin-top: 15px; font-size: 16px; }
+        .trophy-container.lit .trophy-text { color: var(--primary); }
+
+        /* --- 答题区视图 --- */
+        #quiz-screen { display: none; padding-bottom: 100px; max-width: 500px; margin: 0 auto; width: 100%; animation: popIn 0.4s; }
+        .content { padding: 20px; }
+        .q-card { background: var(--white); padding: 30px 20px 20px; border-radius: var(--radius); box-shadow: var(--card-shadow); margin-bottom: 25px; position: relative; border: 3px solid #FFF; }
+        .q-tag { position: absolute; top: -14px; left: 15px; background: var(--primary); color: white; padding: 6px 15px; border-radius: 10px; font-size: 13px; font-weight: bold; }
+        .q-title { font-size: 18px; line-height: 1.6; font-weight: 800; margin: 0; color: #333; }
+        /* 1. 强制禁止拖拽区域的系统滚动 */
+.options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    touch-action: none; /* 关键：防止手机拖拽时网页上下乱跑 */
+}
+
+/* 2. 添加拖拽时的视觉反馈（可选，建议保留） */
+.option-book.touch-active {
+    opacity: 0.9;
+    transform: scale(1.05);
+    z-index: 100;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+.option-book.touch-target-hint {
+    background: #E0F7F5 !important;
+    border: 2px dashed var(--secondary) !important;
+}
+        .option-book { background: #666; color: white; border-radius: 12px 20px 20px 12px; min-height: 70px; display: flex; align-items: center; padding: 15px 15px 15px 55px; position: relative; font-weight: 700; font-size: 16px; cursor: pointer; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1); transition: 0.2s; }
+        .option-book::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 45px; background: rgba(0, 0, 0, 0.2); border-radius: 12px 0 0 12px; border-right: 2px solid rgba(255, 255, 255, 0.15); }
+        .option-book.selected { transform: translateX(5px); border: 3px solid white; box-shadow: 0 10px 25px rgba(255, 140, 105, 0.4); z-index: 2; }
+
+        /* --- 拖拽排序专用样式 --- */
+        #options-grid { touch-action: none; }
+        .option-book { transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.2s; position: relative; z-index: 1; }
+        .option-book[draggable="true"] { cursor: grab; }
+        .option-book.dragging { opacity: 0.5; border: 2px dashed var(--primary) !important; transform: scale(0.98); }
+        .touch-active { opacity: 0.9; transform: scale(1.08) rotate(2deg) !important; box-shadow: 0 15px 30px rgba(0,0,0,0.2) !important; z-index: 100 !important; border: 2px solid var(--primary) !important; }
+        .option-book.drag-over { border: 2px solid var(--secondary) !important; background: #E0F7F5 !important; }
+        .touch-target-hint { transform: scale(0.95); background-color: #F0FFF0 !important; border: 2px solid var(--secondary) !important; box-shadow: inset 0 0 10px rgba(78, 205, 196, 0.2); }
+
+        .sort-badge { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); background: white; color: var(--primary); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 15px; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .color-0 { background: linear-gradient(135deg, #FF9A9E, #FECFEF); color: #333; }
+        .color-1 { background: linear-gradient(135deg, #A18CD1, #FBC2EB); color: #333; }
+        .color-2 { background: linear-gradient(135deg, #84FAB0, #8FD3F4); color: #333; }
+        .color-3 { background: linear-gradient(135deg, #FCCB90, #D57EEB); color: #333; }
+
+        /* 交互反馈动画 */
+        .is-wrong { animation: strongShake 0.5s; border: 4px solid #F44336 !important; background-color: #FFEBEE !important; }
+        @keyframes strongShake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+        .is-right { border: 4px solid #4CAF50 !important; background-color: #E8F5E9 !important; box-shadow: 0 0 20px rgba(76, 175, 80, 0.3); }
+
+        .ai-box { background: #FFFBE6; border: 2px dashed #FFE58F; border-radius: 15px; padding: 18px; margin-top: 25px; display: none; }
+        .footer-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px 20px; display: flex; gap: 15px; box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.05); z-index: 100; }
+        .btn { flex: 1; border: none; padding: 16px; border-radius: 30px; font-weight: 900; font-size: 16px; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; }
+        .btn-next { background: var(--primary); color: white; box-shadow: 0 5px 0 #D6704F; }
+        .btn-next:active { transform: translateY(4px); box-shadow: 0 1px 0 #D6704F; }
+        .stage-summary-card { background: white; border-radius: 24px; padding: 40px 20px; text-align: center; box-shadow: var(--card-shadow); display: none; animation: popIn 0.5s; }
+        .btn-home { background: var(--secondary); box-shadow: 0 5px 0 #3BA59C; margin-top: 30px; font-size: 18px; padding: 18px; }
+
+        /* 模拟教师控制区 */
+        .teacher-panel { background: #2C3E50; color: #FFF; padding: 12px; text-align: center; font-size: 13px; position: fixed; bottom: 0; width: 100%; z-index: 2000; font-weight: bold; }
+        .teacher-panel button { background: var(--primary); border: none; padding: 6px 12px; border-radius: 8px; color: white; margin-left: 10px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+
+<body>
+
+    <div class="global-header">
+        <div class="header-title">🌟 我的探险星运 🌟</div>
+        <div class="star-container" id="star-bar">
+        </div>
+    </div>
+
+    <div id="map-screen">
+        <div class="map-intro">
+            <h2>探险地图</h2>
+            <p style="color:#888; font-size:13px; margin-top:5px; font-weight: bold;">集齐7颗星以上，唤醒终极金奖杯！</p>
+        </div>
+
+        <div class="river-container">
+            <svg class="river-svg" viewBox="0 0 200 400" preserveAspectRatio="none">
+                <path id="path-1" class="line-seg" d="M 100 360 C 160 360, 160 310, 160 260" />
+                <path id="path-2" class="line-seg" d="M 160 260 C 160 200, 40 200, 40 140" />
+                <path id="path-3" class="line-seg" d="M 40 140 C 40 90, 100 90, 100 40" />
+            </svg>
+
+            <div id="node-wrap-3" class="node-wrapper locked node-3">
+                <div class="node" onclick="enterStage(3)">
+                    <div class="img-placeholder">🚀</div>
+                </div>
+                <div class="node-title">应用关</div>
+                <div class="node-stars" id="node-stars-3"></div>
+            </div>
+
+            <div id="node-wrap-2" class="node-wrapper locked node-2">
+                <div class="node" onclick="enterStage(2)">
+                    <div class="img-placeholder">🛠️</div>
+                </div>
+                <div class="node-title">工具关</div>
+                <div class="node-stars" id="node-stars-2"></div>
+            </div>
+
+            <div id="node-wrap-1" class="node-wrapper locked node-1">
+                <div class="node" onclick="enterStage(1)">
+                    <div class="img-placeholder">💡</div>
+                </div>
+                <div class="node-title">理念关</div>
+                <div class="node-stars" id="node-stars-1"></div>
+            </div>
+
+            <div id="node-wrap-0" class="node-wrapper active node-0">
+                <div class="node" onclick="enterStage(0)">
+                    <div class="img-placeholder">🔍</div>
+                </div>
+                <div class="node-title">学情分析</div>
+                <div class="node-stars" id="node-stars-0"></div>
+            </div>
+        </div>
+
+        <div id="final-trophy" class="trophy-container">
+            <div class="trophy-icon">🏆</div>
+            <div class="trophy-text">尚未达到获奖条件，继续加油！</div>
+        </div>
+    </div>
+
+    <div id="quiz-screen">
+        <div class="content">
+            <div id="question-view">
+                <div id="q-card" class="q-card">
+                    <div id="stage-tag" class="q-tag">关卡加载</div>
+                    <p id="q-title" class="q-title">正在准备题目...</p>
+                </div>
+                <div id="options-grid" class="options-list"></div>
+
+                <div id="ai-box" class="ai-box">
+                    <div style="font-weight: 900; color: #856404; font-size: 15px; margin-bottom: 8px;">🤖 导师诊断解析：</div>
+                    <div id="ai-content" style="font-size: 14px; line-height: 1.6; color: #665C47;"></div>
+                </div>
+            </div>
+
+            <div id="stage-summary-view" class="stage-summary-card">
+                <div style="font-size: 60px; margin-bottom: 15px;">🎉</div>
+                <h2 id="summary-title" style="color: var(--primary); margin: 0 0 10px 0; font-size: 28px;">本区探索完成</h2>
+                <p style="color: #666; margin-bottom: 20px; font-weight: bold;">本阶段正确答题：</p>
+                <div style="font-size: 45px; font-weight: 900; color: #4CAF50; margin-bottom: 15px;" id="summary-score">0/0</div>
+                <p id="summary-feedback" style="font-size: 14px; color: #888; line-height: 1.6; padding: 0 10px;"></p>
+                <button class="btn btn-next btn-home" style="width: 100%;" onclick="returnToMap()">返回首页 (大地图) 🗺️</button>
+            </div>
+        </div>
+
+        <div class="footer-nav" id="quiz-footer">
+            <button id="next-btn" class="btn btn-next" style="width:100%" onclick="goNext()">确认选择 ✨</button>
+        </div>
+    </div>
+
+    <div class="teacher-panel">
+        👨‍🏫 教师端演练：
+        <button onclick="simulateTeacherUnlock()">解锁下一个关卡</button>
+    </div>
+
+    <script>
+        // 关卡源数据保持不变
+        const quizData = {
+            "stages": [
+                {
+                    "id": "pre",
+                    "name": "学情分析：看见自己",
+                    "show_feedback": false,
+                    "questions": [
+                        { "id": "p1", "type": "single", "title": "1.当幼儿、家长、教师评价同一个幼儿产生不同的评价结果时，应该看谁的评价客观就认同谁。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "B.不赞同", "analysis": "在幼儿发展评价中，幼儿、家长和教师分别处于不同的观察情境之中，因此他们对同一个幼儿的评价往往会出现差异。例如，家长更了解幼儿在家庭环境中的行为习惯，教师更熟悉幼儿在集体活动中的表现，而幼儿自身也可能表达对自己能力的认识。多主体评价的价值就在于从不同角度全面了解幼儿的发展状况，而不是简单地判断谁更“客观”。教师在面对不同评价结果时，应当进行综合分析，寻找其中的共性与差异，从而更全面地理解幼儿的发展特点。" },
+                        { "id": "p2", "type": "single", "title": "2.幼儿的游戏行为都是在不真实的游戏情景中发生的，所以通过解读游戏行为来评价幼儿发展水平是不太科学的，那些行为也不是儿童的自然行为。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "B.不赞同", "analysis": "虽然游戏情境往往具有想象和虚构的特点，例如孩子会把积木当作房子、把沙子当作食物，但游戏却是幼儿最自然、最真实的学习方式。在游戏中，幼儿会主动表达自己的经验、想法和能力。例如，在建构游戏中，幼儿的空间想象、问题解决能力、合作能力以及创造力都会自然呈现。因此，通过观察和解读幼儿的游戏行为，教师能够更真实地了解幼儿的发展水平。游戏不仅不是“不真实”的行为，反而是幼儿发展评价的重要窗口。" },
+                        { "id": "p3", "type": "single", "title": "3.当幼儿在建构游戏中某一方面的发展达到教育的预期目标后，教师的评价就该结束了。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "B.不赞同", "analysis": "幼儿的发展是一个持续变化、不断提升的过程，而不是在达到某一个目标后就停止。评价的目的不是简单地判断“是否达标”，而是帮助教师持续了解幼儿的发展变化。例如，当幼儿已经掌握某种建构技能后，教师可以进一步观察幼儿是否能够在新的情境中灵活运用、是否能够进行更复杂的创造。因此，评价应该是持续性的过程，通过不断观察和记录，教师才能更准确地支持幼儿的发展。" },
+                        { "id": "p4", "type": "single", "title": "4.评价幼儿的游戏行为时，要时刻树立“后期经验是否比前期经验增长了”的对比意识，否则“通过游戏来学习”的发展目标就落空了。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "A.赞同", "analysis": "幼儿评价的重要原则之一是“发展性评价”，也就是关注幼儿的发展变化。教师在观察游戏行为时，不应只看某一时刻的表现，而应该比较幼儿前后经验的变化。例如，幼儿最初可能只是简单地堆积积木，但经过多次游戏后，可能开始有计划地搭建房屋结构，这就是明显的发展。通过前后对比，教师可以更清晰地看到幼儿学习的过程和成长的轨迹，从而更好地支持幼儿继续发展。" }
+                    ]
+                },
+                {
+                    "id": "s1",
+                    "name": "第一关卡：理念关",
+                    "show_feedback": true,
+                    "questions": [
+                        { "id": "s1q1", "type": "single", "title": "1.当幼儿、家长、教师评价同一个幼儿产生不同的评价结果时，应该看谁的评价客观就认同谁。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "B.不赞同", "analysis": "在现代幼儿教育评价理念中，提倡多主体参与评价，包括教师评价、家长评价以及幼儿自我评价。不同主体所处的情境不同，观察到的行为也不同，因此产生不同的评价结果是正常的。评价的关键不在于简单选择“谁更客观”，而是通过多方信息进行综合分析，从不同角度了解幼儿的发展情况。教师需要整合这些信息，形成更加全面和真实的判断。" },
+                        { "id": "s1q2", "type": "single", "title": "2.幼儿的游戏行为都是在不真实的游戏情景中发生的，所以通过解读游戏行为来评价幼儿发展水平是不太科学的。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "B.不赞同", "analysis": "游戏是幼儿学习和发展的主要方式。虽然游戏具有想象性，但幼儿在游戏中的行为往往是其真实经验和能力的体现。例如，在建构游戏中，幼儿需要进行空间规划、材料选择、结构搭建等活动，这些行为能够反映其思维能力、动手能力以及创造能力。因此，通过观察和解读游戏行为来评价幼儿的发展水平，是一种科学且有效的评价方式。" },
+                        { "id": "s1q3", "type": "single", "title": "3.当幼儿在建构游戏中某一方面的发展达到教育的预期目标后，教师的评价就该结束了。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "B.不赞同", "analysis": "评价在幼儿教育中是一项持续性的工作。即使幼儿已经达到某个阶段性目标，教师仍然需要继续观察其发展情况。例如，幼儿在掌握基本建构技能后，还可能在创造性、合作能力或问题解决能力方面继续发展。因此，评价应当伴随幼儿的发展过程，通过持续观察来帮助教师更好地理解幼儿并提供支持。" },
+                        { "id": "s1q4", "type": "single", "title": "4.评价幼儿的游戏行为时，要时刻树立“后期经验是否比前期经验增长了”的对比意识，否则“通过游戏来学习”的发展目标就落空了。", "options": ["A.赞同", "B.不赞同", "C.不确定"], "answer": "A.赞同", "analysis": "发展性评价强调关注幼儿的进步与变化。教师在观察游戏行为时，应当通过前后对比来判断幼儿是否获得了新的经验。例如，幼儿从最初的简单搭建发展到能够设计复杂结构，这种变化正是学习发生的重要标志。如果缺乏这种对比意识，教师就很难发现幼儿的发展过程，从而影响对幼儿学习情况的准确判断。" }
+                    ]
+                },
+                {
+                    "id": "s2",
+                    "name": "第二关卡：工具关",
+                    "show_feedback": true,
+                    "questions": [
+                        { "id": "s2q1", "type": "multi", "title": "1.以下选项，你认为可以作为评价幼儿建构水平的指标的是（多选题）", "options": ["A.专注、认真、不轻易放弃困难", "B.材料选择是否适宜", "C.作品是否有创新", "D.建构技能运用的怎么样"], "answer": ["A.专注、认真、不轻易放弃困难", "B.材料选择是否适宜", "C.作品是否有创新", "D.建构技能运用的怎么样"], "analysis": "评价幼儿建构水平通常需要从多个维度进行综合判断。首先，幼儿在建构过程中的专注程度和坚持性体现了其学习品质；其次，幼儿是否能够根据建构目标选择合适的材料，反映了其经验和判断能力；第三，作品是否具有创新性可以体现幼儿的想象力与创造力；最后，建构技能的运用情况则直接反映幼儿的操作能力和技术水平。因此，这些指标都可以作为评价幼儿建构水平的重要依据。" },
+                        { "id": "s2q2", "type": "sort", "title": "2.在结构游戏中，幼儿“选材适宜性”发展等级的顺序是（自由拖拽选项，虚线指示所在位置）：", "options": ["A.随意拿取", "B.单一重复", "C.选择适宜材料", "D.创造适宜材料"], "answer": ["A.随意拿取", "B.单一重复", "C.选择适宜材料", "D.创造适宜材料"], "analysis": "幼儿在建构游戏中的选材能力通常会经历逐步发展的过程。最初阶段，幼儿往往是随意拿取材料，没有明确目的；随后可能会反复使用某一种材料，形成单一重复的建构方式；随着经验的增加，幼儿开始根据建构目标主动选择合适的材料；在更高的发展水平上，幼儿甚至能够对材料进行创造性组合或替代使用，从而完成更加复杂的建构任务。" },
+                        { "id": "s2q3", "type": "single", "title": "3.蒙蒙用多块积木搭建了一个城堡，里面有休息室、门窗还有一些人偶，他说：“这是我的城堡，里面住着国王和士兵，外面有一条护城河。”你觉得蒙蒙“作品创造性”的发展等级是：", "options": ["A.第1水平", "B.第2水平", "C.第3水平", "D.第4水平"], "answer": "D.第4水平", "analysis": "从描述中可以看出，蒙蒙不仅搭建了城堡结构，还通过语言赋予作品丰富的情境意义，例如城堡中有国王、士兵以及护城河等元素。这说明他的建构活动已经不仅是简单的结构搭建，而是结合了想象和故事情境，表现出较高的创造性水平。因此可以判断其作品创造性已达到较高的发展水平。" }
+                    ]
+                },
+                {
+                    "id": "s3",
+                    "name": "第三关卡：应用关",
+                    "show_feedback": true,
+                    "questions": [
+                        { "id": "s3q1", "type": "single", "title": "1.在搭建“我们的教学楼”时，你觉得鹿鸣“选材适宜性”的发展等级是：", "options": ["A.第1水平", "B.第2水平", "C.第3水平", "D.第4水平"], "answer": "C.第3水平", "analysis": "在建构活动中，如果幼儿能够根据建构目标主动选择适合的材料，例如使用长积木作为墙体、使用平板作为楼层，这说明幼儿已经具备一定的材料判断能力。此时幼儿不再只是随意拿取材料，而是根据需要进行选择，因此可以判断其选材适宜性发展水平已达到较高阶段。" },
+                        { "id": "s3q2", "type": "single", "title": "2.在搭建“我们的教学楼”时，你觉得鹿鸣“作品创造性”的发展等级是：", "options": ["A.第1水平", "B.第2水平", "C.第3水平", "D.第4水平"], "answer": "C.第3水平", "analysis": "当幼儿能够根据现实生活经验建构具有一定结构特征的作品，例如教学楼的楼层、门窗或功能区域时，说明其已经具备一定的创造性表现。虽然作品可能还未达到复杂情境构建的水平，但已经能够体现出对现实环境的理解与再现，因此可以判断其创造性发展达到中高水平。" },
+                        { "id": "s3q3", "type": "single", "title": "3.在搭建“我们的教学楼”时，你觉得鹿鸣“建构技能使用”的发展等级是：", "options": ["A.第1水平", "B.第2水平", "C.第3水平", "D.第4水平"], "answer": "C.第3水平", "analysis": "建构技能的发展通常表现为幼儿对搭建方法和结构稳定性的掌握程度。当幼儿能够较熟练地运用不同的搭建方式，例如平铺、叠加或交叉搭建，并能够保持结构稳定时，说明其建构技能已经达到较成熟的水平。此阶段幼儿不仅能够完成基本搭建任务，还能够根据需要调整结构，因此属于较高的发展水平。" }
+                    ]
+                }
+            ]
+        };
+
+        const TOTAL_STARS = 10;
+        let globalStarsEarned = 0;
+        let currentSIdx = 0;
+        let currentQIdx = 0;
+
+        let earnedStarsRecord = new Set();
+        let stageStatus = ['active', 'locked', 'locked', 'locked'];
+        let userAnswers = {};
+        let isSubmitted = false;
+
+        function initStars() {
+            const container = document.getElementById('star-bar');
+            container.innerHTML = '';
+            for (let i = 0; i < TOTAL_STARS; i++) {
+                container.innerHTML += `<span class="star" id="star-${i}">★</span>`;
+            }
+        }
+
+        function addStar() {
+            if (globalStarsEarned < TOTAL_STARS) {
+                const star = document.getElementById(`star-${globalStarsEarned}`);
+                star.classList.add('lit');
+                globalStarsEarned++;
+            }
+        }
+
+        function checkTrophy() {
+            const trophy = document.getElementById('final-trophy');
+            const allDone = stageStatus[3] === 'completed';
+
+            if (globalStarsEarned >= 7) {
+                trophy.classList.add('lit');
+                trophy.querySelector('.trophy-text').innerText = "🏆 完美通关！荣获闪耀金奖杯 🏆";
+            } else if (allDone && globalStarsEarned < 7) {
+                trophy.querySelector('.trophy-text').innerText = "闯关结束，星星不足，奖杯未被点亮~";
+            }
+        }
+
+        function enterStage(idx) {
+            if (stageStatus[idx] === 'locked') {
+                alert("🔒 该区域暂未开放，请等待导师解锁！");
+                return;
+            }
+            if (stageStatus[idx] === 'completed') {
+                alert("✅ 该区域探测已完成，数据已上传，不可重复进入。");
+                return;
+            }
+
+            currentSIdx = idx;
+            currentQIdx = 0;
+
+            document.getElementById('map-screen').style.display = 'none';
+            document.getElementById('quiz-screen').style.display = 'block';
+            document.getElementById('stage-summary-view').style.display = 'none';
+            document.getElementById('question-view').style.display = 'block';
+            document.getElementById('quiz-footer').style.display = 'flex';
+
+            renderQuiz();
+        }
+
+        function renderQuiz() {
+            const stage = quizData.stages[currentSIdx];
+            const q = stage.questions[currentQIdx];
+            const nextBtn = document.getElementById('next-btn');
+
+            isSubmitted = false;
+            document.getElementById('ai-box').style.display = 'none';
+            document.getElementById('q-card').className = 'q-card';
+            document.getElementById('stage-tag').innerText = "📍 " + stage.name;
+            document.getElementById('q-title').innerText = q.title;
+
+            const grid = document.getElementById('options-grid');
+            grid.innerHTML = '';
+
+            const userChoice = userAnswers[q.id];
+            const listToRender = q.type === 'sort' ? (userChoice || [...q.options]) : q.options;
+            let touchStartIndex = null;
+            let currentTargetIndex = null;
+
+            listToRender.forEach((opt, i) => {
+                const book = document.createElement('div');
+                book.className = `option-book color-${i % 4}`;
+                
+                if (q.type === 'sort' && !isSubmitted) {
+                    book.dataset.index = i;
+                    
+                    book.ontouchstart = (e) => {
+                        touchStartIndex = i;
+                        book.classList.add('touch-active');
+                        if (navigator.vibrate) navigator.vibrate(20);
+                    };
+
+                    book.ontouchmove = (e) => {
+                        const touch = e.touches[0];
+                        book.style.opacity = '0.5'; 
+                        const elementUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+                        book.style.opacity = '0.9';
+
+                        const targetBook = elementUnderFinger ? elementUnderFinger.closest('.option-book') : null;
+                        document.querySelectorAll('.option-book').forEach(b => b.classList.remove('touch-target-hint'));
+
+                        if (targetBook && targetBook !== book) {
+                            targetBook.classList.add('touch-target-hint');
+                            const newTargetIdx = parseInt(targetBook.dataset.index);
+                            if (newTargetIdx !== currentTargetIndex && navigator.vibrate) {
+                                navigator.vibrate(5);
+                            }
+                            currentTargetIndex = newTargetIdx;
+                        } else {
+                            currentTargetIndex = null;
+                        }
+                        e.preventDefault();
+                    };
+
+                    book.ontouchmove = (e) => {
+    const touch = e.touches[0];
+
+    // 【关键修改点 1】：使用 pointerEvents 临时让当前元素“透明”
+    // 这样 elementFromPoint 才能穿透它，抓取到它下方的目标元素
+    book.style.pointerEvents = 'none'; 
+    const elementUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+    book.style.pointerEvents = 'auto'; // 探测完立即恢复正常
+
+    const targetBook = elementUnderFinger ? elementUnderFinger.closest('.option-book') : null;
+    
+    // 清除旧的提示
+    document.querySelectorAll('.option-book').forEach(b => b.classList.remove('touch-target-hint'));
+
+    if (targetBook && targetBook !== book) {
+        targetBook.classList.add('touch-target-hint');
+        const newTargetIdx = parseInt(targetBook.dataset.index);
+        
+        // 震动反馈
+        if (newTargetIdx !== currentTargetIndex && navigator.vibrate) {
+            navigator.vibrate(5);
+        }
+        currentTargetIndex = newTargetIdx;
+    } else {
+        currentTargetIndex = null;
+    }
+    
+    // 阻止页面跟随手指滚动
+    e.preventDefault();
+};
+
+                    book.innerHTML = `<div class="sort-badge">${i+1}</div> <span>${opt}</span>`;
+                } else {
+                    const prefix = ["A", "B", "C", "D"][i] || "🔹";
+                    book.innerHTML = `<span style="position:absolute; left:18px; font-weight:900; font-size:18px; opacity:0.8;">${prefix}</span> <span>${opt.substring(opt.indexOf('.')+1 || 0)}</span>`;
+                    if (q.type === 'multi' ? (userChoice && userChoice.includes(opt)) : (userChoice === opt)) book.classList.add('selected');
+                    book.onclick = () => handleOptionClick(q, opt, i, listToRender);
+                }
+                grid.appendChild(book);
+            });
+            nextBtn.innerText = "确认选择 ✨";
+        }
+
+        function handleOptionClick(q, opt, index, list) {
+            if (isSubmitted) return;
+            if (q.type === 'sort') {
+            } else if (q.type === 'multi') {
+                if (!userAnswers[q.id]) userAnswers[q.id] = [];
+                const idx = userAnswers[q.id].indexOf(opt);
+                if (idx > -1) userAnswers[q.id].splice(idx, 1);
+                else userAnswers[q.id].push(opt);
+            } else {
+                userAnswers[q.id] = opt;
+            }
+            renderQuiz();
+        }
+
+        function handleSort(q, fromIndex, toIndex) {
+            if (fromIndex === toIndex) return;
+            let list = userAnswers[q.id] ? [...userAnswers[q.id]] : [...q.options];
+            const [movedItem] = list.splice(fromIndex, 1);
+            list.splice(toIndex, 0, movedItem);
+            userAnswers[q.id] = list;
+            renderQuiz();
+        }
+
+        function goNext() {
+            const stage = quizData.stages[currentSIdx];
+            const q = stage.questions[currentQIdx];
+
+            if (!userAnswers[q.id] && q.type !== 'sort') {
+                alert("请先做出你的选择！"); return;
+            }
+
+            if (!isSubmitted) {
+                const ans = userAnswers[q.id];
+                let correct = false;
+
+                if (q.type === 'multi') correct = JSON.stringify([...(ans || [])].sort()) === JSON.stringify([...q.answer].sort());
+                else if (q.type === 'sort') correct = JSON.stringify(ans || q.options) === JSON.stringify(q.answer);
+                else correct = (ans === q.answer);
+
+                const card = document.getElementById('q-card');
+
+                if (stage.id === 'pre' || stage.show_feedback === false) {
+                    console.log("学情分析模式：数据已记录，无反馈");
+                } else {
+                    if (correct) {
+                        card.classList.add('is-right');
+                        if (!earnedStarsRecord.has(q.id)) {
+                            earnedStarsRecord.add(q.id);
+                            addStar();
+                        }
+                    } else {
+                        card.classList.add('is-wrong');
+                    }
+                    document.getElementById('ai-box').style.display = 'block';
+                    document.getElementById('ai-content').innerText = q.analysis;
+                }
+
+                isSubmitted = true;
+                document.getElementById('next-btn').innerText = "下一题 ➡️";
+                return;
+            }
+
+            if (currentQIdx < stage.questions.length - 1) {
+                currentQIdx++;
+                renderQuiz();
+            } else {
+                showStageSummary(stage);
+            }
+        }
+
+        function showStageSummary(stage) {
+            document.getElementById('question-view').style.display = 'none';
+            document.getElementById('quiz-footer').style.display = 'none';
+            document.getElementById('stage-summary-view').style.display = 'block';
+
+            let stageScore = 0;
+            stage.questions.forEach(q => {
+                const u = userAnswers[q.id];
+                if (!u) return;
+                if (q.type === 'multi' && JSON.stringify([...u].sort()) === JSON.stringify([...q.answer].sort())) stageScore++;
+                else if (q.type === 'sort' && JSON.stringify(u) === JSON.stringify(q.answer)) stageScore++;
+                else if (u === q.answer) stageScore++;
+            });
+
+            document.getElementById('summary-title').innerText = `${stage.name} 已完成`;
+            document.getElementById('summary-score').innerText = `${stageScore} / ${stage.questions.length}`;
+
+            if (currentSIdx === 0) {
+                document.getElementById('summary-feedback').innerText = "热身结束！请返回首页等待导师发布新任务。";
+            } else {
+                document.getElementById('summary-feedback').innerText = "太棒了，您的答题数据已安全记录。";
+            }
+
+            stageStatus[currentSIdx] = 'completed';
+            checkTrophy();
+        }
+
+        function returnToMap() {
+            document.getElementById('quiz-screen').style.display = 'none';
+            document.getElementById('map-screen').style.display = 'block';
+            updateMapUI();
+        }
+
+        function updateMapUI() {
+            for (let i = 0; i < 4; i++) {
+                const wrap = document.getElementById(`node-wrap-${i}`);
+                wrap.className = `node-wrapper node-${i} ${stageStatus[i]}`;
+
+                // 更新河流高亮状态
+                if (stageStatus[i] === 'completed' && i < 3) {
+                    const svgPath = document.getElementById(`path-${i + 1}`);
+                    if (svgPath) svgPath.classList.add('lit');
+                }
+
+                // 新增：更新节点下方的星星展示区
+                const starBox = document.getElementById(`node-stars-${i}`);
+                if (starBox) {
+                    if (i === 0) {
+                        // 学情分析不计星星
+                        starBox.innerHTML = `<span style="font-size:12px;color:#999;background: rgba(255,255,255,0.8);padding:2px 8px;border-radius:10px;">热身不计星</span>`;
+                    } else {
+                        const stage = quizData.stages[i];
+                        let starsHtml = '';
+                        stage.questions.forEach(q => {
+                            if (earnedStarsRecord.has(q.id)) {
+                                starsHtml += '<span style="color:#FFD700; text-shadow:0 0 4px rgba(255,215,0,0.8);">★</span>';
+                            } else {
+                                starsHtml += '<span style="color:#D1D5DB;">★</span>';
+                            }
+                        });
+                        // 使用白色半透明胶囊包裹星星，让显示更清晰
+                        starBox.innerHTML = `<div style="background: rgba(255,255,255,0.9); display:inline-block; padding:2px 8px; border-radius:12px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">${starsHtml}</div>`;
+                    }
+                }
+            }
+        }
+
+        function simulateTeacherUnlock() {
+            const nextLockedIdx = stageStatus.indexOf('locked');
+            if (nextLockedIdx !== -1) {
+                stageStatus[nextLockedIdx] = 'active';
+                updateMapUI();
+                alert(`✅ 模拟导师端：已下发【${quizData.stages[nextLockedIdx].name}】的访问权限！请点击发光节点进入。`);
+            } else {
+                alert("所有区域均已解锁完毕！");
+            }
+        }
+
+        initStars();
+        updateMapUI();
+
+    </script>
+</body>
+
+</html>
